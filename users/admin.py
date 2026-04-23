@@ -1,3 +1,5 @@
 from django.contrib import admin
+from users.models import UserPreference
 
-# Register your models here.
+
+admin.site.register(UserPreference)
