@@ -1,3 +1,5 @@
 from django.contrib import admin
+from trips.models import ChatSession, ChatMessage
 
-# Register your models here.
+admin.site.register(ChatSession)
+admin.site.register(ChatMessage)
