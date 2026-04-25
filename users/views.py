@@ -1,8 +1,8 @@
 
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, logout, authenticate
+from django.contrib.auth import login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, require_http_methods
 from .models import UserPreference
 
 # SIGNUP
@@ -34,6 +34,7 @@ def login_view(request):
 
 
 
+@require_http_methods(["POST"])
 def logout_view(request):
     logout(request)
     return redirect('login')
@@ -42,7 +43,7 @@ def logout_view(request):
 
 @login_required
 def preferences_view(request):
-    preference = UserPreference.objects.get(user=request.user)
+    preference, _ = UserPreference.objects.get_or_create(user=request.user)
     if request.method == 'POST':
         preference.budget = request.POST.get('budget')
         preference.dietary_preference = request.POST.get('dietary_preference')
