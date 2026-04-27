@@ -1,11 +1,25 @@
 
+from django import forms
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth.decorators import login_required, require_http_methods
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
 from .models import UserPreference
 
-# SIGNUP
+
+class UserPreferenceForm(forms.ModelForm):
+    class Meta:
+        model = UserPreference
+        fields = [
+            'budget',
+            'dietary_preference',
+            'travel_pace',
+            'interests',
+            'hotel_stars',
+        ]
+
+
 def signup_view(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
@@ -20,10 +34,10 @@ def signup_view(request):
     return render(request, 'users/signup.html', {'form': form})
 
 
-# LOGIN
+
 def login_view(request):
     if request.method == 'POST':
-        form = AuthenticationForm(data=request.POST)
+        form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
             login(request, user)
@@ -45,11 +59,14 @@ def logout_view(request):
 def preferences_view(request):
     preference, _ = UserPreference.objects.get_or_create(user=request.user)
     if request.method == 'POST':
-        preference.budget = request.POST.get('budget')
-        preference.dietary_preference = request.POST.get('dietary_preference')
-        preference.travel_pace = request.POST.get('travel_pace')
-        preference.interests = request.POST.get('interests')
-        preference.hotel_stars = request.POST.get('hotel_stars')
-        preference.save()
-        return redirect('preferences')
-    return render(request, 'users/preferences.html', {'preference': preference})
+        form = UserPreferenceForm(request.POST, instance=preference)
+        if form.is_valid():
+            form.save()
+            return redirect('preferences')
+    else:
+        form = UserPreferenceForm(instance=preference)
+
+    return render(request, 'users/preferences.html', {
+        'preference': preference,
+        'form': form,
+    })
