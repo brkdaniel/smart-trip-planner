@@ -1,4 +1,3 @@
-
 from django import forms
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
@@ -29,9 +28,7 @@ def _default_authenticated_route(user):
 
 
 def home_view(request):
-    if request.user.is_authenticated:
-        return redirect(_default_authenticated_route(request.user))
-    return redirect('login')
+    return render(request, 'html/home.html')
 
 
 def signup_view(request):
@@ -45,7 +42,7 @@ def signup_view(request):
             return redirect('preferences')
     else:
         form = UserCreationForm()
-    return render(request, 'users/signup.html', {'form': form})
+    return render(request, 'html/signup.html', {'form': form})
 
 
 
@@ -69,7 +66,7 @@ def login_view(request):
             return redirect(default_route)
     else:
         form = AuthenticationForm(request)
-    return render(request, 'users/login.html', {
+    return render(request, 'html/login.html', {
         'form': form,
         'next': next_url,
     })
@@ -99,7 +96,7 @@ def preferences_view(request):
     else:
         form = UserPreferenceForm(instance=preference)
 
-    return render(request, 'users/preferences.html', {
+    return render(request, 'html/preferences.html', {
         'preference': preference,
         'form': form,
     })
