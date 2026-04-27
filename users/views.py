@@ -21,6 +21,19 @@ class UserPreferenceForm(forms.ModelForm):
         ]
 
 
+def _default_authenticated_route(user):
+    preference, _ = UserPreference.objects.get_or_create(user=user)
+    if preference.onboarding_completed:
+        return 'chat'
+    return 'preferences'
+
+
+def home_view(request):
+    if request.user.is_authenticated:
+        return redirect(_default_authenticated_route(request.user))
+    return redirect('login')
+
+
 def signup_view(request):
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
@@ -29,7 +42,7 @@ def signup_view(request):
         
             UserPreference.objects.create(user=user)
             login(request, user)
-            return redirect('chat')
+            return redirect('preferences')
     else:
         form = UserCreationForm()
     return render(request, 'users/signup.html', {'form': form})
@@ -44,13 +57,16 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
+            default_route = _default_authenticated_route(user)
+            if default_route == 'preferences':
+                return redirect('preferences')
             if next_url and url_has_allowed_host_and_scheme(
                 next_url,
                 allowed_hosts={request.get_host()},
                 require_https=request.is_secure(),
             ):
                 return redirect(next_url)
-            return redirect('chat')
+            return redirect(default_route)
     else:
         form = AuthenticationForm(request)
     return render(request, 'users/login.html', {
@@ -73,8 +89,13 @@ def preferences_view(request):
     if request.method == 'POST':
         form = UserPreferenceForm(request.POST, instance=preference)
         if form.is_valid():
-            form.save()
-            return redirect('preferences')
+            was_completed = preference.onboarding_completed
+            updated_preference = form.save(commit=False)
+            updated_preference.onboarding_completed = True
+            updated_preference.save()
+            if was_completed:
+                return redirect('preferences')
+            return redirect('chat')
     else:
         form = UserPreferenceForm(instance=preference)
 

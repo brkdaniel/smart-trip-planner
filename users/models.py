@@ -35,6 +35,9 @@ class UserPreference(models.Model):
     interests = models.TextField(
         blank=True
     )
+    onboarding_completed = models.BooleanField(
+        default=False
+    )
 
     class Meta:
         db_table = 'user_preference'
