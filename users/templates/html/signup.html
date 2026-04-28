@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sign Up</title>
+</head>
+<body>
+  <h1>Create account</h1>
+
+  {% if form.errors %}
+    <div style="border:1px solid #c00;padding:12px;background:#fee;color:#600;margin-bottom:16px;">
+      Please fix the errors below.
+    </div>
+  {% endif %}
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Sign up</button>
+  </form>
+
+  <p>
+    <a href="{% url 'login' %}">Already have an account? Log in</a>
+  </p>
+</body>
+</html>

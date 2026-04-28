@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Trippi — personalized trip planning based on your preferences. Create itineraries, find hotels, manage budgets and discover activities.">
+    <meta name="keywords" content="trip planner, travel planning, itinerary, travel preferences, hotels, budget, activities, Trippi">
+    <link rel="icon" type="image/png" href="{% static 'favicon/favicon-96x96.png' %}" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
+    <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
+    <meta name="apple-mobile-web-app-title" content="Trippi" />
+    <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
+    <title>Trippi</title>
+    <link rel="stylesheet" href="{% static 'css/home.css' %}">
+</head>
+<body>
+    <div class="video-background" aria-hidden="true">
+        <video autoplay muted loop playsinline>
+            <source src="{% static 'home.mp4' %}" type="video/mp4">
+        </video>
+    </div>
+
+    <main class="container">
+        <section class="hero" aria-label="Home">
+            <h1 class="hero-title">Trippi</h1>
+            <p class="hero-subtitle">Let's plan your dream trip together!</p>
+
+            <div class="actions">
+                {% if user.is_authenticated %}
+                    <a class="button button-primary" href="{% url 'chat' %}">Get Started</a>
+                {% else %}
+                    <a class="button button-primary" href="{% url 'login' %}">Get Started</a>
+                {% endif %}
+            </div>
+        </section>
+    </main>
+</body>
+</html>
