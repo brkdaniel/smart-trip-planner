@@ -8,7 +8,7 @@ def chat_view(request):
     if request.method == 'POST':
         prompt = request.POST.get('prompt')
         if not prompt or not prompt.strip():
-            return render(request, 'trips/chat.html', {'error': 'Prompt cannot be empty'})
+            return render(request, 'html/chat.html', {'error': 'Prompt cannot be empty'})
         session = ChatSession.objects.create(
             user=request.user,
             title=prompt[:50],
@@ -23,7 +23,7 @@ def chat_view(request):
         session.status = 'completed'
         session.save()
         return redirect('history')
-    return render(request, 'trips/chat.html')
+    return render(request, 'html/chat.html')
 
 
 @login_required

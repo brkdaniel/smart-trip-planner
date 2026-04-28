@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login</title>
+</head>
+<body>
+  <h1>Login</h1>
+
+  {% if form.non_field_errors %}
+    <div style="border:1px solid #c00;padding:12px;background:#fee;color:#600;margin-bottom:16px;">
+      <strong>Login failed:</strong>
+      <ul>
+        {% for err in form.non_field_errors %}
+          <li>{{ err }}</li>
+        {% endfor %}
+      </ul>
+      <p>
+        <a href="{% url 'signup' %}">Create an account</a>
+        &nbsp;|&nbsp;
+        <a href="/reset/">Reset password</a>
+      </p>
+    </div>
+  {% endif %}
+
+  <form method="post" action="">
+    {% csrf_token %}
+
+    <p>
+      {{ form.username.label_tag }}<br>
+      {{ form.username }}
+      {% if form.username.errors %}
+        <br><span style="color:#c00">{{ form.username.errors.0 }}</span>
+      {% endif %}
+    </p>
+
+    <p>
+      {{ form.password.label_tag }}<br>
+      {{ form.password }}
+      {% if form.password.errors %}
+        <br><span style="color:#c00">{{ form.password.errors.0 }}</span>
+      {% endif %}
+    </p>
+
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit">Log in</button>
+  </form>
+
+  <p>
+    <a href="{% url 'home' %}">Home</a>
+    &nbsp;|&nbsp;
+    <a href="{% url 'signup' %}">Sign up</a>
+  </p>
+</body>
+</html>
