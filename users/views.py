@@ -54,15 +54,13 @@ def login_view(request):
         if form.is_valid():
             user = form.get_user()
             login(request, user)
-            default_route = _default_authenticated_route(user)
-            if default_route == 'preferences':
-                return redirect('preferences')
             if next_url and url_has_allowed_host_and_scheme(
                 next_url,
                 allowed_hosts={request.get_host()},
                 require_https=request.is_secure(),
             ):
                 return redirect(next_url)
+            default_route = _default_authenticated_route(user)
             return redirect(default_route)
     else:
         form = AuthenticationForm(request)

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chat History</title>
+</head>
+<body>
+  <h1>Chat History</h1>
+
+  {% if sessions %}
+    <ul>
+      {% for session in sessions %}
+        <li>
+          <strong>{{ session.title|default:"Untitled session" }}</strong>
+          - {{ session.status }}
+          - {{ session.created_at }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No chat sessions yet.</p>
+  {% endif %}
+
+  <p><a href="{% url 'chat' %}">Back to chat</a></p>
+</body>
+</html>

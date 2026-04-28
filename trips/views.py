@@ -31,4 +31,4 @@ def history_view(request):
     sessions = ChatSession.objects.filter(
         user=request.user
     ).order_by('-created_at')
-    return render(request, 'trips/history.html', {'sessions': sessions})
+    return render(request, 'html/history.html', {'sessions': sessions})
