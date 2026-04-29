@@ -1,56 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  {% load static %}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Login</title>
+  <title>Trippi | Login</title>
+  <link rel="stylesheet" href="{% static 'css/login.css' %}">
 </head>
 <body>
-  <h1>Login</h1>
-
-  {% if form.non_field_errors %}
-    <div style="border:1px solid #c00;padding:12px;background:#fee;color:#600;margin-bottom:16px;">
-      <strong>Login failed:</strong>
-      <ul>
-        {% for err in form.non_field_errors %}
-          <li>{{ err }}</li>
-        {% endfor %}
-      </ul>
-      <p>
-        <a href="{% url 'signup' %}">Create an account</a>
-        &nbsp;|&nbsp;
-        <a href="/reset/">Reset password</a>
-      </p>
+  <div class="login-shell">
+    <div class="login-background" aria-hidden="true">
+      <video autoplay muted loop playsinline>
+        <source src="{% static 'home.mp4' %}" type="video/mp4">
+      </video>
+      <div class="login-overlay"></div>
     </div>
-  {% endif %}
 
-  <form method="post" action="">
-    {% csrf_token %}
+    <main class="login-main">
+      <section class="login-card" aria-label="Login">
+        <p class="brand">Trippi</p>
+        <h1>Conectează-te la aventura ta.</h1>
+        <p class="subtitle">Intră în cont cu adresa de email și parola.</p>
 
-    <p>
-      {{ form.username.label_tag }}<br>
-      {{ form.username }}
-      {% if form.username.errors %}
-        <br><span style="color:#c00">{{ form.username.errors.0 }}</span>
-      {% endif %}
-    </p>
+        {% if form.non_field_errors %}
+          <div class="form-error" role="alert">
+            <strong>Login failed:</strong>
+            <ul>
+              {% for err in form.non_field_errors %}
+                <li>{{ err }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
 
-    <p>
-      {{ form.password.label_tag }}<br>
-      {{ form.password }}
-      {% if form.password.errors %}
-        <br><span style="color:#c00">{{ form.password.errors.0 }}</span>
-      {% endif %}
-    </p>
+        <form method="post" action="" class="login-form" autocomplete="off">
+          {% csrf_token %}
 
-    <input type="hidden" name="next" value="{{ next }}">
-    <button type="submit">Log in</button>
-  </form>
+          <label class="field">
+            <span>Adresă email</span>
+            {{ form.email }}
+            {% if form.email.errors %}
+              <small class="field-error">{{ form.email.errors.0 }}</small>
+            {% endif %}
+          </label>
 
-  <p>
-    <a href="{% url 'home' %}">Home</a>
-    &nbsp;|&nbsp;
-    <a href="{% url 'signup' %}">Sign up</a>
-  </p>
+          <label class="field">
+            <div class="field-row">
+              <span>Parolă</span>
+              <span class="forgot-link">Ai uitat parola?</span>
+            </div>
+            {{ form.password }}
+            {% if form.password.errors %}
+              <small class="field-error">{{ form.password.errors.0 }}</small>
+            {% endif %}
+          </label>
+
+          <input type="hidden" name="next" value="{{ next }}">
+          <button type="submit" class="login-button">LOGIN</button>
+        </form>
+
+        <p class="signup-link">
+          Nu ai cont? <a href="{% url 'signup' %}">Înregistrează-te</a>
+        </p>
+      </section>
+    </main>
+  </div>
 </body>
 </html>

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  {% load static %}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Sign Up</title>
@@ -14,7 +15,7 @@
     </div>
   {% endif %}
 
-  <form method="post">
+  <form method="post" autocomplete="off">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Sign up</button>
