@@ -38,7 +38,7 @@ def chat_view(request, session_id=None):
         # B. Salvam mesajul utilizatorului
         ChatMessage.objects.create(
             session=current_session,
-            role='USER',
+            role='user',
             content=prompt
         )
 
@@ -53,7 +53,7 @@ def chat_view(request, session_id=None):
         # D. Salvare raspuns AI
         ChatMessage.objects.create(
             session=current_session,
-            role='ASSISTANT',
+            role='assistant',
             content=ai_response
         )
 
