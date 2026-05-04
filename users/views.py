@@ -101,8 +101,12 @@ def login_view(request):
     next_url = request.POST.get('next') or request.GET.get('next') or ''
 
     def _authenticate_by_email(email, password):
-        user = User.objects.filter(email__iexact=email).first()
-        if user and user.check_password(password):
+        users = list(User.objects.filter(email__iexact=email)[:2])
+        if len(users) != 1:
+            return None
+
+        user = users[0]
+        if user.check_password(password):
             return user
         return None
 
