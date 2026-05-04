@@ -1,7 +1,8 @@
+import django
 from django.urls import path
 from . import views
 
 urlpatterns = [
     path('chat/', views.chat_view, name='chat'),
-    path('history/', views.history_view, name='history'),
+    path('chat/<int:session_id>/', views.chat_view, name='chat_with_session'),
 ]

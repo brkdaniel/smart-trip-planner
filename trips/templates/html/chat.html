@@ -1,138 +1,84 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat</title>
-    <style>
-        :root {
-            --bg: #f5f7fb;
-            --card: #ffffff;
-            --text: #111827;
-            --muted: #6b7280;
-            --border: #e5e7eb;
-            --primary: #2563eb;
-            --danger-bg: #fef2f2;
-            --danger-border: #fecaca;
-            --danger-text: #b91c1c;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(160deg, #eef2ff 0%, var(--bg) 58%);
-            color: var(--text);
-            display: grid;
-            place-items: center;
-            padding: 24px;
-        }
-
-        .card {
-            width: 100%;
-            max-width: 760px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 28px;
-            box-shadow: 0 10px 26px rgba(17, 24, 39, 0.08);
-        }
-
-        h1 {
-            margin: 0 0 8px;
-            font-size: 1.8rem;
-        }
-
-        p {
-            margin: 0 0 18px;
-            color: var(--muted);
-        }
-
-        .error {
-            margin: 0 0 16px;
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid var(--danger-border);
-            background: var(--danger-bg);
-            color: var(--danger-text);
-            font-size: 0.95rem;
-        }
-
-        form {
-            display: grid;
-            gap: 12px;
-        }
-
-        label {
-            font-weight: 600;
-            font-size: 0.95rem;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 140px;
-            resize: vertical;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 12px;
-            font: inherit;
-            box-sizing: border-box;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        button,
-        a.button {
-            border: none;
-            border-radius: 10px;
-            padding: 10px 16px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-block;
-        }
-
-        button {
-            background: var(--primary);
-            color: #ffffff;
-        }
-
-        a.button {
-            background: #ffffff;
-            border: 1px solid var(--border);
-            color: #111827;
-        }
-
-        @media (max-width: 700px) {
-            .card {
-                padding: 20px;
-            }
-        }
-    </style>
+    <link rel="icon" type="image/png" href="{% static 'favicon/favicon-96x96.png' %}" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
+  <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
+  <meta name="apple-mobile-web-app-title" content="Trippi" />
+  <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
+    <title>Trippi Chat</title>
+    <link rel="stylesheet" href="{% static 'css/chat.css' %}">
 </head>
 <body>
-    <main class="card">
-        <h1>Trip Chat</h1>
-        <p>Write your travel request and submit to create a new chat session.</p>
 
-        {% if error %}
-            <div class="error">{{ error }}</div>
-        {% endif %}
+    <aside class="sidebar">
+        <a href="{% url 'chat' %}" class="new-chat-btn">+ Chat Nou</a>
+        
+        <div class="session-list">
+            <p style="font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">Istoric Recente</p>
+            {% for s in sessions %}
+                <a href="{% url 'chat_with_session' s.id %}" class="session-item {% if s.id == current_session.id %}active{% endif %}">
+                    {{ s.title|default:"Conversație fără titlu" }}
+                </a>
+            {% endfor %}
+        </div>
 
-        <form method="post">
-            {% csrf_token %}
-            <label for="prompt">Your prompt</label>
-            <textarea id="prompt" name="prompt" placeholder="Example: Plan a 3-day city break in Rome with a medium budget..."></textarea>
+        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #4b5563;">
+            <form action="{% url 'logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit" style="background:none; border:none; color:#9ca3af; cursor:pointer;">Logout</button>
+            </form>
+        </div>
+    </aside>
 
-            <div class="actions">
-                <button type="submit">Send</button>
-                <a class="button" href="{% url 'history' %}">View History</a>
-            </div>
-        </form>
+    <main class="chat-container">
+        
+        <div class="messages-window">
+            {% if not messages %}
+                <div class="empty-state">
+                    <h1 style="color: #1f2937;">Unde vrei să călătorești?</h1>
+                    <p>Sunt asistentul tău Trippi. Spune-mi o destinație sau un buget!</p>
+                </div>
+            {% else %}
+                {% for msg in messages %}
+                    <div class="message {{ msg.role }}">
+                        {{ msg.content }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="input-area">
+            <form method="post" class="input-container">
+                {% csrf_token %}
+                <textarea name="prompt" rows="1" placeholder="Întreabă-mă despre zboruri, hoteluri sau itinerarii..."></textarea>
+                <button type="submit" class="send-btn">Trimite</button>
+            </form>
+        </div>
+
     </main>
+
+    <script>
+        // Ajustare automată înălțime textarea
+        const tx = document.getElementsByTagName("textarea");
+        for (let i = 0; i < tx.length; i++) {
+          tx[i].setAttribute("style", "height:" + (tx[i].scrollHeight) + "px;overflow-y:hidden;");
+          tx[i].addEventListener("input", OnInput, false);
+        }
+
+        function OnInput() {
+          this.style.height = "auto";
+          this.style.height = (this.scrollHeight) + "px";
+        }
+        // Derulare automată la ultimul mesaj
+        const messagesWindow = document.querySelector('.messages-window');
+        if (messagesWindow) {
+            messagesWindow.scrollTop = messagesWindow.scrollHeight;
+        }
+    </script>
 </body>
 </html>
