@@ -25,6 +25,22 @@ class SignupForm(UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['username'].widget.attrs.update({
+            'class': 'signup-input',
+            'placeholder': 'Username',
+        })
+        self.fields['email'].widget.attrs.update({
+            'class': 'signup-input',
+            'placeholder': 'Adresă email',
+        })
+        self.fields['password1'].widget.attrs.update({
+            'class': 'signup-input',
+            'placeholder': 'Parolă',
+        })
+        self.fields['password2'].widget.attrs.update({
+            'class': 'signup-input',
+            'placeholder': 'Confirmă parola',
+        })
+        self.fields['username'].widget.attrs.update({
             'autocomplete': 'off',
         })
         self.fields['email'].widget.attrs.update({

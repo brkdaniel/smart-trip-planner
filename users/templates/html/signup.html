@@ -4,25 +4,84 @@
   {% load static %}
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Sign Up</title>
+  <link rel="icon" type="image/png" href="{% static 'favicon/favicon-96x96.png' %}" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
+  <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
+  <meta name="apple-mobile-web-app-title" content="Trippi" />
+  <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
+  <title>Trippi | Sign up</title>
+  <link rel="stylesheet" href="{% static 'css/signup.css' %}">
 </head>
 <body>
-  <h1>Create account</h1>
-
-  {% if form.errors %}
-    <div style="border:1px solid #c00;padding:12px;background:#fee;color:#600;margin-bottom:16px;">
-      Please fix the errors below.
+  <div class="signup-shell">
+    <div class="signup-background" aria-hidden="true">
+      <video autoplay muted loop playsinline>
+        <source src="{% static 'home.mp4' %}" type="video/mp4">
+      </video>
+      <div class="signup-overlay"></div>
     </div>
-  {% endif %}
 
-  <form method="post" autocomplete="off">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Sign up</button>
-  </form>
+    <main class="signup-main">
+      <section class="signup-card" aria-label="Sign up">
+        <p class="brand">Trippi</p>
+        <h1>Începe-ți călătoria cu noi.</h1>
+        <p class="subtitle">Creează-ți contul pentru a planifica vacanțe personalizate.</p>
 
-  <p>
-    <a href="{% url 'login' %}">Already have an account? Log in</a>
-  </p>
+        {% if form.non_field_errors %}
+          <div class="form-error" role="alert">
+            <strong>Signup failed:</strong>
+            <ul>
+              {% for err in form.non_field_errors %}
+                <li>{{ err }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+
+        <form method="post" action="" class="signup-form" autocomplete="off">
+          {% csrf_token %}
+
+          <label class="field">
+            <span>Username</span>
+            {{ form.username }}
+            {% if form.username.errors %}
+              <small class="field-error">{{ form.username.errors.0 }}</small>
+            {% endif %}
+          </label>
+
+          <label class="field">
+            <span>Adresă email</span>
+            {{ form.email }}
+            {% if form.email.errors %}
+              <small class="field-error">{{ form.email.errors.0 }}</small>
+            {% endif %}
+          </label>
+
+          <label class="field">
+            <span>Parolă</span>
+            {{ form.password1 }}
+            {% if form.password1.errors %}
+              <small class="field-error">{{ form.password1.errors.0 }}</small>
+            {% endif %}
+          </label>
+
+          <label class="field">
+            <span>Confirmă parola</span>
+            {{ form.password2 }}
+            {% if form.password2.errors %}
+              <small class="field-error">{{ form.password2.errors.0 }}</small>
+            {% endif %}
+          </label>
+
+          <button type="submit" class="signup-button">SIGN UP</button>
+        </form>
+
+        <p class="login-link">
+          Ai deja cont? <a href="{% url 'login' %}">Autentifică-te</a>
+        </p>
+      </section>
+    </main>
+  </div>
 </body>
 </html>
