@@ -15,6 +15,12 @@ class SignupForm(UserCreationForm):
     class Meta(UserCreationForm.Meta):
         fields = ('username', 'email')
 
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError('Există deja un cont cu această adresă email.')
+        return email
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.email = self.cleaned_data['email']

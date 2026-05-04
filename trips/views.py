@@ -23,7 +23,9 @@ def chat_view(request, session_id=None):
     if request.method == 'POST':
         prompt = request.POST.get('prompt')
         if not prompt or not prompt.strip():
-            return redirect('chat' if not session_id else 'chat_with_session', session_id=session_id)
+            if session_id:
+                return redirect('chat_with_session', session_id=session_id)
+            return redirect('chat')
 
         # A. Daca nu suntem intr-o sesiune (e chat nou), o cream
         if not current_session:
