@@ -4,6 +4,8 @@ from django.utils import timezone
 from .models import ChatSession, ChatMessage
 # Importam si preferintele pentru a le putea citi/actualiza
 from users.models import UserPreference 
+# Importam orchestratorul care va gestiona logica AI
+from agents.orchestrator import handle_user_message
 
 @login_required
 def chat_view(request, session_id=None):
@@ -42,13 +44,11 @@ def chat_view(request, session_id=None):
             content=prompt
         )
 
-        # C. LOGICA AI (Planner + Researcher/Amadeus)
         # 1. Citim preferintele din DB (invizibil)
         prefs, _ = UserPreference.objects.get_or_create(user=request.user)
         
-        # 2. Aici vei apela API-ul tau de AI (Agentul 1)
-        # ai_response = agent_orchestrator(prompt, prefs)
-        ai_response = "Buna! Am inteles ca vrei sa mergi in " + prompt + ". Verific acum optiunile..."
+        # 2. Apelam orchestratorul
+        ai_response = handle_user_message(prompt, current_session, request.user)
 
         # D. Salvare raspuns AI
         ChatMessage.objects.create(
