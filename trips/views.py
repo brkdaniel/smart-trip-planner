@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.http import JsonResponse
 from .models import ChatSession, ChatMessage
 # Importam si preferintele pentru a le putea citi/actualiza
 from users.models import UserPreference 
@@ -23,8 +24,15 @@ def chat_view(request, session_id=None):
 
     # 3. Procesarea unui mesaj nou (POST)
     if request.method == 'POST':
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         prompt = request.POST.get('prompt')
         if not prompt or not prompt.strip():
+            if is_ajax:
+                return JsonResponse({
+                    "session_id": current_session.id if current_session else None,
+                    "message": None,
+                    "error": "Prompt cannot be empty."
+                }, status=400)
             if session_id:
                 return redirect('chat_with_session', session_id=session_id)
             return redirect('chat')
@@ -46,12 +54,12 @@ def chat_view(request, session_id=None):
 
         # 1. Citim preferintele din DB (invizibil)
         prefs, _ = UserPreference.objects.get_or_create(user=request.user)
-        
+
         # 2. Apelam orchestratorul
         ai_response = handle_user_message(prompt, current_session, request.user)
 
         # D. Salvare raspuns AI
-        ChatMessage.objects.create(
+        ai_msg = ChatMessage.objects.create(
             session=current_session,
             role='assistant',
             content=ai_response
@@ -60,7 +68,17 @@ def chat_view(request, session_id=None):
         current_session.status = 'completed'
         current_session.save()
 
-        # Ne redirectionam catre aceeasi sesiune pentru a vedea raspunsul
+        if is_ajax:
+            return JsonResponse({
+                "session_id": current_session.id,
+                "message": {
+                    "role": ai_msg.role,
+                    "content": ai_msg.content,
+                    "sent_at": ai_msg.sent_at.isoformat()
+                },
+                "error": None
+            })
+
         return redirect('chat_with_session', session_id=current_session.id)
 
     # 4. Randam pagina cu toate datele necesare

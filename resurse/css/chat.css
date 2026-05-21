@@ -18,7 +18,9 @@ body {
 
 /* SIDEBAR STYLES */
 .sidebar {
-    width: 260px;
+    width: 220px;
+    top: 0;
+    left: 0;
     background-color: var(--sidebar-bg);
     color: white;
     display: flex;
@@ -92,21 +94,60 @@ body {
     line-height: 1.5;
     position: relative;
 }
-
-.message.USER {
+.message.user {
     align-self: flex-end;
     background-color: var(--primary);
     color: white;
     border-bottom-right-radius: 2px;
 }
 
-.message.ASSISTANT {
+
+.message.assistant {
     align-self: flex-start;
     background-color: var(--ai-msg);
     color: var(--text-main);
     border-bottom-left-radius: 2px;
     border: 1px solid #e5e7eb;
 }
+
+/* B2.4: optimistic-UI reconciliation states */
+.message.user.sending {
+    opacity: 0.55;
+}
+
+.message.user.failed {
+    opacity: 0.85;
+    border: 1px solid #ef4444;
+    box-shadow: 0 0 0 1px #ef4444 inset;
+}
+
+/* B2.5: inline send-failure row */
+.message-error {
+    align-self: flex-end;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: -4px;
+    font-size: 0.85rem;
+    color: #ef4444;
+}
+
+.message-error .retry-btn {
+    background: none;
+    border: 1px solid #ef4444;
+    color: #ef4444;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.message-error .retry-btn:hover {
+    background-color: #ef4444;
+    color: #ffffff;
+}
+
 
 /* INPUT AREA */
 .input-area {
@@ -134,6 +175,18 @@ textarea {
     font-family: inherit;
 }
 
+
+.input-container {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end; /* NEW: Aligns the button to the bottom */
+}
+
 .send-btn {
     background: var(--primary);
     color: white;
@@ -142,10 +195,180 @@ textarea {
     border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
+    height: 44px; /* NEW: Forces the button to stay a normal size */
+    margin-bottom: 2px; /* NEW: Tiny adjustment to align perfectly with text */
 }
 
 .empty-state {
     text-align: center;
     margin-top: 15vh;
     color: var(--text-muted);
+}
+
+
+/* --- B1.2: MOBILE SIDEBAR STYLES --- */
+.hamburger-btn {
+    display: none;
+    background-color: var(--sidebar-bg);
+    color: white;
+    border: none;
+    padding: 15px 20px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+}
+
+
+@media (max-width: 768px) {
+    .hamburger-btn {
+        display: block; /* Show the button only on mobile */
+    }
+
+
+    .sidebar {
+        position: fixed; /* Take it out of the normal flow */
+        height: 100vh;
+        z-index: 1000; /* Ensure it floats above the chat */
+        transform: translateX(-100%); /* Hide it off-screen to the left by default */
+        box-shadow: 4px 0 15px rgba(0,0,0,0.5); /* Add a shadow so it looks like it floats */
+    }
+
+
+    /* When JS adds this class, slide it back onto the screen */
+    .sidebar.open {
+        transform: translateX(0);
+    }
+}
+
+
+   
+/* --- B1.2: CLOSE BUTTON STYLES --- */
+.mobile-sidebar-header {
+    display: none; /* Hidden on desktop */
+    text-align: right;
+    margin-bottom: 15px;
+}
+
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #9ca3af;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+
+.close-btn:hover {
+    color: white;
+}
+
+
+/* Update your existing mobile media query to show the header */
+@media (max-width: 768px) {
+    .hamburger-btn { display: block; }
+   
+    .mobile-sidebar-header {
+        display: block; /* Show the close button on mobile */
+    }
+
+
+    .sidebar {
+        position: fixed;
+        height: 100vh;
+        z-index: 1000;
+        transform: translateX(-100%);
+        box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+    }
+   
+    .sidebar.open { transform: translateX(0); }
+}
+
+
+/* --- B1.3: Markdown CSS Fixes --- */
+.message p {
+    margin-top: 0;
+    margin-bottom: 0.75em; /* Adds a nice space between paragraphs */
+}
+
+.message p:last-child {
+    margin-bottom: 0; /* Removes the gap at the bottom of the chat bubble */
+}
+
+.message ul, .message ol {
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    padding-left: 20px;
+}
+
+
+
+
+/* --- B1.4: TYPING INDICATOR ANIMATION --- */
+.typing-indicator-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 24px;
+    width: fit-content;
+    /* This ensures the dots don't stretch the bubble weirdly */
+    min-height: 24px; 
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--text-muted);
+    border-radius: 50%;
+    /* The animation lasts 1.4 seconds and loops infinitely */
+    animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+/* Stagger the animations so they bounce one after another */
+.typing-dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+/* The actual keyframe animation that scales the dots */
+@keyframes typingBounce {
+    0%, 80%, 100% { 
+        transform: scale(0); 
+    }
+    40% { 
+        transform: scale(1); 
+    }
+}
+
+
+/* --- B1.6: SUGGESTION CHIPS --- */
+.suggestion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 25px;
+}
+
+.chip {
+    background: white;
+    border: 1px solid #e5e7eb;
+    padding: 10px 18px;
+    border-radius: 20px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.chip:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #fff7ed; /* Very light orange background */
 }
