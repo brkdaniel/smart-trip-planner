@@ -50,14 +50,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
-            // --- FIX: Evităm session leak-ul actualizând URL-ul ---
+
+            // If a brand-new session was just created, sync the URL AND the
+            // sidebar so the new chat is renamable/deletable without a reload.
             if (data.session_id) {
-             const newUrl = `/chat/${data.session_id}/`;
-            // Verificăm dacă nu cumva suntem deja pe URL-ul corect
-            if (window.location.pathname !== newUrl) {
-             window.history.pushState({ path: newUrl }, '', newUrl);
+                const newUrl = `/chat/${data.session_id}/`;
+                if (window.location.pathname !== newUrl) {
+                    addNewSessionToSidebar(data.session_id, promptText);
+                    window.history.pushState({ path: newUrl }, '', newUrl);
+                }
             }
-}
 
             typingIndicator.style.display = 'none';
 
@@ -88,12 +90,12 @@ document.addEventListener('DOMContentLoaded', () => {
         errorRow.className = 'message-error';
 
         const label = document.createElement('span');
-        label.textContent = "Couldn't send.";
+        label.textContent = 'Nu s-a putut trimite.';
 
         const retryBtn = document.createElement('button');
         retryBtn.type = 'button';
         retryBtn.className = 'retry-btn';
-        retryBtn.textContent = 'Try again';
+        retryBtn.textContent = 'Încearcă din nou';
         retryBtn.addEventListener('click', () => {
             bubble.remove();
             errorRow.remove();
@@ -188,13 +190,52 @@ document.addEventListener('DOMContentLoaded', () => {
         menuTargetItem = null;
     }
 
+    // Insert a freshly-created session at the top of the sidebar and make it
+    // active. Mirrors the server-side template / title-truncation logic so the
+    // new row matches a reload-rendered one exactly.
+    function addNewSessionToSidebar(sessionId, promptText) {
+        const list = document.querySelector('.session-list');
+        if (!list) return;
+
+        // De-activate whatever was active before.
+        list.querySelectorAll('.session-item.active').forEach((el) => {
+            el.classList.remove('active');
+            el.dataset.isActive = '0';
+        });
+
+        const title = promptText.length > 30
+            ? promptText.slice(0, 30) + '...'
+            : promptText;
+
+        const row = document.createElement('div');
+        row.className = 'session-item active';
+        row.dataset.sessionId = String(sessionId);
+        row.dataset.isActive = '1';
+
+        const link = document.createElement('a');
+        link.href = `/chat/${sessionId}/`;
+        link.className = 'session-item-link';
+        link.textContent = title;
+
+        row.appendChild(link);
+        row.addEventListener('contextmenu', openSessionMenu);
+
+        // Insert right after the "Istoric Recente" header so the newest sits on top.
+        const header = list.querySelector('p');
+        if (header && header.nextSibling) {
+            list.insertBefore(row, header.nextSibling);
+        } else {
+            list.appendChild(row);
+        }
+    }
+
     async function handleDeleteSession(item) {
         const sessionId = item.dataset.sessionId;
         const titleEl = item.querySelector('.session-item-link');
         const title = titleEl ? titleEl.textContent.trim() : 'această conversație';
         const isActive = item.dataset.isActive === '1';
 
-        if (!confirm(`Ștergi „${title}"? Acțiunea nu poate fi anulată.`)) return;
+        if (!confirm(`Ștergi „${title}”? Acțiunea nu poate fi anulată.`)) return;
 
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 

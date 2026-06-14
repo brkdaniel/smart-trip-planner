@@ -241,6 +241,7 @@ body {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     display: flex;
     gap: 10px;
+    align-items: flex-end; /* Aligns the send button to the bottom of the textarea */
 }
 
 textarea {
@@ -251,18 +252,6 @@ textarea {
     outline: none;
     font-size: 1rem;
     font-family: inherit;
-}
-
-
-.input-container {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 10px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    display: flex;
-    gap: 10px;
-    align-items: flex-end; /* NEW: Aligns the button to the bottom */
 }
 
 .send-btn {
@@ -299,36 +288,12 @@ textarea {
 }
 
 
-@media (max-width: 768px) {
-    .hamburger-btn {
-        display: block; /* Show the button only on mobile */
-    }
-
-
-    .sidebar {
-        position: fixed; /* Take it out of the normal flow */
-        height: 100vh;
-        z-index: 1000; /* Ensure it floats above the chat */
-        transform: translateX(-100%); /* Hide it off-screen to the left by default */
-        box-shadow: 4px 0 15px rgba(0,0,0,0.5); /* Add a shadow so it looks like it floats */
-    }
-
-
-    /* When JS adds this class, slide it back onto the screen */
-    .sidebar.open {
-        transform: translateX(0);
-    }
-}
-
-
-   
 /* --- B1.2: CLOSE BUTTON STYLES --- */
 .mobile-sidebar-header {
     display: none; /* Hidden on desktop */
     text-align: right;
     margin-bottom: 15px;
 }
-
 
 .close-btn {
     background: none;
@@ -339,30 +304,33 @@ textarea {
     cursor: pointer;
 }
 
-
 .close-btn:hover {
     color: white;
 }
 
-
-/* Update your existing mobile media query to show the header */
+/* All mobile-only rules live here in one place so future tweaks don't
+   have to be duplicated across blocks. */
 @media (max-width: 768px) {
-    .hamburger-btn { display: block; }
-   
-    .mobile-sidebar-header {
-        display: block; /* Show the close button on mobile */
+    .hamburger-btn {
+        display: block; /* Show the hamburger only on mobile */
     }
 
+    .mobile-sidebar-header {
+        display: block; /* Show the close button only on mobile */
+    }
 
     .sidebar {
-        position: fixed;
+        position: fixed;          /* Take it out of the normal flow */
         height: 100vh;
-        z-index: 1000;
-        transform: translateX(-100%);
+        z-index: 1000;            /* Float above the chat */
+        transform: translateX(-100%); /* Hide off-screen by default */
         box-shadow: 4px 0 15px rgba(0,0,0,0.5);
     }
-   
-    .sidebar.open { transform: translateX(0); }
+
+    /* When JS adds this class, slide the sidebar back onto the screen */
+    .sidebar.open {
+        transform: translateX(0);
+    }
 }
 
 
