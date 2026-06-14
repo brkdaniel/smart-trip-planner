@@ -50,6 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
+            // --- FIX: Evităm session leak-ul actualizând URL-ul ---
+            if (data.session_id) {
+             const newUrl = `/chat/${data.session_id}/`;
+            // Verificăm dacă nu cumva suntem deja pe URL-ul corect
+            if (window.location.pathname !== newUrl) {
+             window.history.pushState({ path: newUrl }, '', newUrl);
+            }
+}
 
             typingIndicator.style.display = 'none';
 
@@ -58,7 +66,10 @@ document.addEventListener('DOMContentLoaded', () => {
             optimisticBubble.classList.add('sent');
 
             if (data.message && data.message.content) {
-                appendMessage('assistant', data.message.content);
+                // B3.2 (mockup): fake-stream tokens into the bubble so the UX
+                // is ready to swap for EventSource when Branch A ships SSE.
+                const bubble = appendMessage('assistant', '');
+                await streamInto(bubble, data.message.content);
             }
 
         } catch (error) {
@@ -115,5 +126,191 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function scrollToBottom() {
         messagesWindow.scrollTop = messagesWindow.scrollHeight;
+    }
+
+    // -----------------------------------------------------------------------
+    // B3.3 + B3.4: right-click context menu for sidebar sessions (Rename / Șterge)
+    // -----------------------------------------------------------------------
+    const contextMenu = document.getElementById('session-context-menu');
+    let menuTargetItem = null;
+
+    document.querySelectorAll('.session-item').forEach((item) => {
+        item.addEventListener('contextmenu', openSessionMenu);
+    });
+
+    if (contextMenu) {
+        contextMenu.addEventListener('click', (event) => {
+            const button = event.target.closest('.context-menu-item');
+            if (!button || !menuTargetItem) return;
+            const action = button.dataset.action;
+            const targetItem = menuTargetItem; // capture before hide nulls it
+            hideContextMenu();
+            if (action === 'delete') {
+                handleDeleteSession(targetItem);
+            } else if (action === 'rename') {
+                startRenameSession(targetItem);
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            if (contextMenu.hidden) return;
+            if (!contextMenu.contains(event.target)) hideContextMenu();
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !contextMenu.hidden) hideContextMenu();
+        });
+
+        // Re-hide when the user scrolls the sidebar — the menu would otherwise
+        // hover in the wrong place.
+        document.querySelector('.session-list')?.addEventListener('scroll', hideContextMenu);
+    }
+
+    function openSessionMenu(event) {
+        if (!contextMenu) return;
+        event.preventDefault();
+        menuTargetItem = event.currentTarget;
+
+        // Show first so we can measure, then clamp to viewport.
+        contextMenu.hidden = false;
+        contextMenu.style.left = '0px';
+        contextMenu.style.top = '0px';
+        const { offsetWidth: w, offsetHeight: h } = contextMenu;
+        const x = Math.min(event.clientX, window.innerWidth - w - 4);
+        const y = Math.min(event.clientY, window.innerHeight - h - 4);
+        contextMenu.style.left = `${x}px`;
+        contextMenu.style.top = `${y}px`;
+    }
+
+    function hideContextMenu() {
+        if (!contextMenu) return;
+        contextMenu.hidden = true;
+        menuTargetItem = null;
+    }
+
+    async function handleDeleteSession(item) {
+        const sessionId = item.dataset.sessionId;
+        const titleEl = item.querySelector('.session-item-link');
+        const title = titleEl ? titleEl.textContent.trim() : 'această conversație';
+        const isActive = item.dataset.isActive === '1';
+
+        if (!confirm(`Ștergi „${title}"? Acțiunea nu poate fi anulată.`)) return;
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        try {
+            const response = await fetch(`/chat/${sessionId}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken,
+                },
+            });
+            if (!response.ok) throw new Error(`Server ${response.status}`);
+
+            if (isActive) {
+                window.location.href = '/chat/';
+                return;
+            }
+            item.remove();
+        } catch (error) {
+            console.error('Delete failed:', error);
+            alert('Nu am putut șterge conversația. Încearcă din nou.');
+        }
+    }
+
+    function startRenameSession(item) {
+        const link = item.querySelector('.session-item-link');
+        if (!link) return;
+        const sessionId = item.dataset.sessionId;
+        const originalTitle = link.textContent.trim();
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'session-rename-input';
+        input.maxLength = 255;
+        input.value = originalTitle;
+        input.setAttribute('aria-label', 'Redenumește conversația');
+
+        link.style.display = 'none';
+        item.insertBefore(input, link);
+        input.focus();
+        input.select();
+
+        let resolved = false;
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        async function commit() {
+            if (resolved) return;
+            resolved = true;
+            const newTitle = input.value.trim();
+            if (!newTitle || newTitle === originalTitle) {
+                cleanup();
+                return;
+            }
+            try {
+                const response = await fetch(`/chat/${sessionId}/rename/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': csrfToken,
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        title: newTitle,
+                        csrfmiddlewaretoken: csrfToken,
+                    }),
+                });
+                if (!response.ok) throw new Error(`Server ${response.status}`);
+                const data = await response.json();
+                link.textContent = data.title || newTitle;
+            } catch (error) {
+                console.error('Rename failed:', error);
+                alert('Nu am putut redenumi conversația.');
+            }
+            cleanup();
+        }
+
+        function cancel() {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+        }
+
+        function cleanup() {
+            input.removeEventListener('keydown', onKeydown);
+            input.removeEventListener('blur', commit);
+            input.remove();
+            link.style.display = '';
+        }
+
+        function onKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                commit();
+            } else if (event.key === 'Escape') {
+                event.preventDefault();
+                cancel();
+            }
+        }
+
+        input.addEventListener('keydown', onKeydown);
+        input.addEventListener('blur', commit);
+    }
+
+    // B3.2: stream `fullText` into `bubble` one token at a time, re-rendering
+    // markdown each tick. Swap the for-loop for an EventSource onmessage when
+    // Branch A's streaming endpoint is live — the rest stays identical.
+    async function streamInto(bubble, fullText) {
+        bubble.classList.add('streaming');
+        const tokens = fullText.split(/(\s+)/); // keep whitespace as its own tokens
+        let acc = '';
+        for (const token of tokens) {
+            acc += token;
+            bubble.innerHTML = DOMPurify.sanitize(marked.parse(acc));
+            scrollToBottom();
+            await new Promise((r) => setTimeout(r, 25));
+        }
+        bubble.classList.remove('streaming');
     }
 });

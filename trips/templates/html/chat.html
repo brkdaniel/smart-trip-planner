@@ -12,7 +12,7 @@
     <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
     <title>Trippi Chat</title>
    
-    <link rel="stylesheet" href="{% static 'css/chat.css' %}?v=8">
+    <link rel="stylesheet" href="{% static 'css/chat.css' %}">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     
@@ -29,9 +29,11 @@
         <div class="session-list">
             <p style="font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">Istoric Recente</p>
             {% for s in sessions %}
-                <a href="{% url 'chat_with_session' s.id %}" class="session-item {% if s.id == current_session.id %}active{% endif %}">
-                    {{ s.title|default:"Conversație fără titlu" }}
-                </a>
+                <div class="session-item {% if s.id == current_session.id %}active{% endif %}"
+                     data-session-id="{{ s.id }}"
+                     data-is-active="{% if s.id == current_session.id %}1{% else %}0{% endif %}">
+                    <a href="{% url 'chat_with_session' s.id %}" class="session-item-link">{{ s.title|default:"Conversație fără titlu" }}</a>
+                </div>
             {% endfor %}
         </div>
 
@@ -83,6 +85,12 @@
         </div>
 
     </main>
+
+    <!-- B3.3 + B3.4: shared context menu for the sidebar sessions -->
+    <div id="session-context-menu" class="context-menu" role="menu" hidden>
+        <button type="button" class="context-menu-item" data-action="rename" role="menuitem">Redenumește</button>
+        <button type="button" class="context-menu-item context-menu-item-danger" data-action="delete" role="menuitem">Șterge</button>
+    </div>
 
     <script>
         // --- B1.2: Mobile Sidebar Logic ---
@@ -179,6 +187,6 @@
             }
         });
     </script>
-     <script src="{% static 'js/chat.js' %}?v=1"></script>
+     <script src="{% static 'js/chat.js' %}"></script>
 </body>
 </html>
