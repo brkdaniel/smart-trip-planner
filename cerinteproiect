@@ -1,0 +1,18 @@
+Proiect
+Implementare - 35 de puncte:
+Live demo al aplicat, iei
+Includerea în implementarea a minim 2 agent, i AI (implementat, i prin
+apeluri API sau prin modele locale de dimensiuni mici; performant, a
+agent, ilor va fi evaluată relativ la capacităt, ile modelelor folosite)
+Procesul de dezvoltare - 35 de puncte
+crearea de specificat, ii, backlog-uri, etc. - 6 puncte
+descrierea arhitecturii, diagrame (diagrame UML, arhitectura
+componentelor, workflow-uri, etc.) - 6 puncte
+source control cu git (branch-uri, merge, rebase, pull request), minim 5
+commit-uri per student - 6 puncte
+teste automate, verificări formale - 6 puncte
+raportare bug s, i rezolvare cu pull request - 6 puncte
+design patterns - 6 puncte
+raport despre folosirea instrumentelor AI în timpul dezvoltării - 6 puncte
+Obs: punctajul pentru dezvoltare se trunchează la 35 (astfel, puteţi
+obţine punctaj maxim chiar dacă nu aţi tratat complet fiecare punct)
