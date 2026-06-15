@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.db.models import Count
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from .models import ChatSession, ChatMessage
@@ -83,10 +84,33 @@ def chat_view(request, session_id=None):
         return redirect('chat_with_session', session_id=current_session.id)
 
     # 4. Randam pagina cu toate datele necesare
+    # C2.5: preferintele pentru un mesaj de bun venit personalizat in empty-state
+    prefs, _ = UserPreference.objects.get_or_create(user=request.user)
     return render(request, 'html/chat.html', {
         'sessions': sessions,           # Pentru sidebar
         'current_session': current_session, # Pentru a sti ce chat e activ
-        'messages': messages            # Mesajele din chat-ul selectat
+        'messages': messages,           # Mesajele din chat-ul selectat
+        'preferences': prefs,           # Pentru welcome state-ul personalizat
+    })
+
+
+@login_required
+def trip_history(request):
+    """C3.1/C3.2: list the user's chat sessions with a preview of the first message."""
+    sessions = (
+        ChatSession.objects
+        .filter(user=request.user)
+        .annotate(message_count=Count('messages'))
+        .order_by('-created_at')
+    )
+    # C3.2: attach the first user message as a preview snippet for each card.
+    for session in sessions:
+        first = session.messages.filter(role='user').order_by('sent_at').first()
+        session.preview = first.content if first else ''
+
+    return render(request, 'html/trip_history.html', {
+        'sessions': sessions,
+        'active_section': 'trips',
     })
 
 

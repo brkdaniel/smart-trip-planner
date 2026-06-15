@@ -35,7 +35,14 @@ class UserPreference(models.Model):
     interests = models.TextField(
         blank=True
     )
-    
+    # C2.1/A2.5: per-field ISO timestamp of when Agent 2 (Data Architect) set a
+    # value, e.g. {"hotel_stars": "2026-06-15T...", ...}. Lets the UI show an
+    # "inferred from chat" badge; cleared by Branch C when the user edits a field.
+    ai_updated_fields = models.JSONField(
+        default=dict,
+        blank=True
+    )
+
     class Meta:
         db_table = 'user_preference'
 

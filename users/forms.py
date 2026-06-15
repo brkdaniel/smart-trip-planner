@@ -7,6 +7,32 @@ class PreferenceForm(forms.ModelForm):
     class Meta:
         model = UserPreference
         fields = ['dietary_preference', 'hotel_stars', 'travel_pace', 'budget', 'interests']
+        labels = {
+            'dietary_preference': 'Restricții alimentare',
+            'hotel_stars': 'Stele hotel (1–5)',
+            'travel_pace': 'Ritm de călătorie',
+            'budget': 'Buget (EUR)',
+            'interests': 'Interese',
+        }
+        widgets = {
+            'dietary_preference': forms.TextInput(attrs={
+                'class': 'profile-input',
+                'placeholder': 'ex: vegetarian, fără gluten',
+            }),
+            'hotel_stars': forms.NumberInput(attrs={
+                'class': 'profile-input', 'min': 1, 'max': 5, 'step': 1,
+            }),
+            # C1.5: segmented/radio control instead of a plain dropdown.
+            'travel_pace': forms.RadioSelect(),
+            'budget': forms.NumberInput(attrs={
+                'class': 'profile-input', 'min': 0, 'step': '0.01',
+                'placeholder': 'ex: 1500',
+            }),
+            'interests': forms.Textarea(attrs={
+                'class': 'profile-input', 'rows': 2,
+                'placeholder': 'ex: muzee, plajă, viață de noapte',
+            }),
+        }
 
 
 class EmailChangeForm(forms.Form):

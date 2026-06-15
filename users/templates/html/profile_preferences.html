@@ -13,7 +13,12 @@
 
     {% for field in form %}
       <label>
-        <span>{{ field.label }}</span>
+        <span>
+          {{ field.label }}
+          {% if field.name in ai_fields %}
+            <small class="ai-badge" title="Extras automat din conversațiile tale. Editează ca să suprascrii.">✨ extras din chat</small>
+          {% endif %}
+        </span>
         {{ field }}
         {% if field.help_text %}
           <small class="helptext">{{ field.help_text }}</small>

@@ -19,6 +19,10 @@ load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# A3.3: directory for log files (LLM call telemetry). Created if missing.
+LOG_DIR = BASE_DIR / 'logs'
+os.makedirs(LOG_DIR, exist_ok=True)
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -131,3 +135,49 @@ STATICFILES_DIRS = [
 ]
 
 LOGIN_URL = 'login'
+
+# A3.1: run the Data Architect (Agent 2) in a background thread so the user gets
+# the Concierge reply immediately. Set False (e.g. in tests) to run inline.
+AGENTS_RUN_ASYNC = True
+
+# A3.4: RapidAPI-backed tools for real flight/hotel data (Concierge tools).
+# All optional: without a key the Concierge falls back to estimate-based answers.
+RAPIDAPI_KEY = os.getenv('RAPIDAPI_KEY', '')
+# Flights use a separate listing (google-flights2) with its own subscription, so
+# they get their own key; falls back to RAPIDAPI_KEY if unset.
+RAPIDAPI_FLIGHTS_KEY = os.getenv('RAPIDAPI_FLIGHTS_KEY', '') or RAPIDAPI_KEY
+RAPIDAPI_FLIGHTS_HOST = os.getenv('RAPIDAPI_FLIGHTS_HOST', '')
+RAPIDAPI_HOTELS_HOST = os.getenv('RAPIDAPI_HOTELS_HOST', '')
+# Endpoint paths (defaults filled after probing the chosen listings).
+RAPIDAPI_FLIGHTS_PATH = os.getenv('RAPIDAPI_FLIGHTS_PATH', '')
+RAPIDAPI_HOTELS_PATH = os.getenv('RAPIDAPI_HOTELS_PATH', '')
+
+# A3.3: log every LLM call (model, tokens, latency, success/fail) to a file.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {'format': '%(asctime)s %(levelname)s %(name)s %(message)s'},
+        'llm': {'format': '%(asctime)s %(message)s'},
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'llm_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / 'llm_calls.log'),
+            'formatter': 'llm',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        # Agent logs (orchestrator, concierge, data_architect) → console.
+        'agents': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+        # Per-call LLM telemetry → file (and console for convenience).
+        'agents.llm': {'handlers': ['llm_file', 'console'], 'level': 'INFO', 'propagate': False},
+        # A3.4: external tool (RapidAPI) call telemetry → same file + console.
+        'agents.tools': {'handlers': ['llm_file', 'console'], 'level': 'INFO', 'propagate': False},
+    },
+}
