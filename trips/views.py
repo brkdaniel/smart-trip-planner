@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 from .models import ChatSession, ChatMessage
 # Importam si preferintele pentru a le putea citi/actualiza
 from users.models import UserPreference 
@@ -23,8 +25,15 @@ def chat_view(request, session_id=None):
 
     # 3. Procesarea unui mesaj nou (POST)
     if request.method == 'POST':
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         prompt = request.POST.get('prompt')
         if not prompt or not prompt.strip():
+            if is_ajax:
+                return JsonResponse({
+                    "session_id": current_session.id if current_session else None,
+                    "message": None,
+                    "error": "Prompt cannot be empty."
+                }, status=400)
             if session_id:
                 return redirect('chat_with_session', session_id=session_id)
             return redirect('chat')
@@ -46,12 +55,12 @@ def chat_view(request, session_id=None):
 
         # 1. Citim preferintele din DB (invizibil)
         prefs, _ = UserPreference.objects.get_or_create(user=request.user)
-        
+
         # 2. Apelam orchestratorul
         ai_response = handle_user_message(prompt, current_session, request.user)
 
         # D. Salvare raspuns AI
-        ChatMessage.objects.create(
+        ai_msg = ChatMessage.objects.create(
             session=current_session,
             role='assistant',
             content=ai_response
@@ -60,7 +69,17 @@ def chat_view(request, session_id=None):
         current_session.status = 'completed'
         current_session.save()
 
-        # Ne redirectionam catre aceeasi sesiune pentru a vedea raspunsul
+        if is_ajax:
+            return JsonResponse({
+                "session_id": current_session.id,
+                "message": {
+                    "role": ai_msg.role,
+                    "content": ai_msg.content,
+                    "sent_at": ai_msg.sent_at.isoformat()
+                },
+                "error": None
+            })
+
         return redirect('chat_with_session', session_id=current_session.id)
 
     # 4. Randam pagina cu toate datele necesare
@@ -69,3 +88,46 @@ def chat_view(request, session_id=None):
         'current_session': current_session, # Pentru a sti ce chat e activ
         'messages': messages            # Mesajele din chat-ul selectat
     })
+
+
+@login_required
+@require_POST
+def delete_session(request, session_id):
+    """B3.3: delete a chat session owned by the current user."""
+    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+    session.delete()
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({"deleted": True, "session_id": session_id})
+
+    return redirect('chat')
+
+
+@login_required
+@require_POST
+def rename_session(request, session_id):
+    """B3.4: rename a chat session owned by the current user."""
+    session = get_object_or_404(ChatSession, id=session_id, user=request.user)
+    new_title = (request.POST.get('title') or '').strip()
+
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    if not new_title:
+        if is_ajax:
+            return JsonResponse(
+                {"renamed": False, "error": "Titlul nu poate fi gol."},
+                status=400,
+            )
+        return redirect('chat_with_session', session_id=session_id)
+
+    session.title = new_title[:255]
+    session.save()
+
+    if is_ajax:
+        return JsonResponse({
+            "renamed": True,
+            "session_id": session.id,
+            "title": session.title,
+        })
+
+    return redirect('chat_with_session', session_id=session_id)

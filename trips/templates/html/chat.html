@@ -5,25 +5,39 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" href="{% static 'favicon/favicon-96x96.png' %}" sizes="96x96" />
-  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
-  <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
-  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
-  <meta name="apple-mobile-web-app-title" content="Trippi" />
-  <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
+    <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
+    <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
+    <meta name="apple-mobile-web-app-title" content="Trippi" />
+    <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
     <title>Trippi Chat</title>
+   
     <link rel="stylesheet" href="{% static 'css/chat.css' %}">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"
+            integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi"
+            crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"
+            integrity="sha384-cwS6YdhLI7XS60eoDiC+egV0qHp8zI+Cms46R0nbn8JrmoAzV9uFL60etMZhAnSu"
+            crossorigin="anonymous"></script>
+    
 </head>
 <body>
 
     <aside class="sidebar">
+        <div class="mobile-sidebar-header">
+            <button id="close-menu-btn" class="close-btn">✖ Închide</button>
+        </div>
+
         <a href="{% url 'chat' %}" class="new-chat-btn">+ Chat Nou</a>
         
         <div class="session-list">
             <p style="font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">Istoric Recente</p>
             {% for s in sessions %}
-                <a href="{% url 'chat_with_session' s.id %}" class="session-item {% if s.id == current_session.id %}active{% endif %}">
-                    {{ s.title|default:"Conversație fără titlu" }}
-                </a>
+                <div class="session-item {% if s.id == current_session.id %}active{% endif %}"
+                     data-session-id="{{ s.id }}"
+                     data-is-active="{% if s.id == current_session.id %}1{% else %}0{% endif %}">
+                    <a href="{% url 'chat_with_session' s.id %}" class="session-item-link">{{ s.title|default:"Conversație fără titlu" }}</a>
+                </div>
             {% endfor %}
         </div>
 
@@ -37,19 +51,33 @@
 
     <main class="chat-container">
         
+        <button id="mobile-menu-btn" class="hamburger-btn">
+            ☰ Meniu
+        </button>
+
         <div class="messages-window">
             {% if not messages %}
                 <div class="empty-state">
                     <h1 style="color: #1f2937;">Unde vrei să călătorești?</h1>
                     <p>Sunt asistentul tău Trippi. Spune-mi o destinație sau un buget!</p>
+                    
+                    <div class="suggestion-chips">
+                        <button class="chip">Planifică un city break în Roma</button>
+                        <button class="chip">Vacanță la mare cu buget redus</button>
+                        <button class="chip">3 zile la munte în România</button>
+                    </div>
                 </div>
             {% else %}
                 {% for msg in messages %}
-                    <div class="message {{ msg.role }}">
-                        {{ msg.content }}
-                    </div>
+                    <div class="message {{ msg.role }}">{{ msg.content }}</div>
                 {% endfor %}
             {% endif %}
+
+            <div id="typing-indicator" class="message assistant typing-indicator-container" style="display: none;">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
         </div>
 
         <div class="input-area">
@@ -62,8 +90,47 @@
 
     </main>
 
+    <!-- B3.3 + B3.4: shared context menu for the sidebar sessions -->
+    <div id="session-context-menu" class="context-menu" role="menu" hidden>
+        <button type="button" class="context-menu-item" data-action="rename" role="menuitem">Redenumește</button>
+        <button type="button" class="context-menu-item context-menu-item-danger" data-action="delete" role="menuitem">Șterge</button>
+    </div>
+
     <script>
-        // Ajustare automată înălțime textarea
+        // --- B1.2: Mobile Sidebar Logic ---
+        const menuBtn = document.getElementById('mobile-menu-btn');
+        const closeBtn = document.getElementById('close-menu-btn');
+        const sidebar = document.querySelector('.sidebar');
+
+        // 1. Open Menu Logic
+        if (menuBtn && sidebar) {
+            menuBtn.addEventListener('click', () => {
+                sidebar.classList.add('open');
+            });
+        } else {
+            console.error("Eroare: Butonul de meniu sau sidebar-ul nu a fost găsit în HTML.");
+        }
+
+        // 2. Close Menu Logic (X Button)
+        if (closeBtn && sidebar) {
+            closeBtn.addEventListener('click', () => {
+                sidebar.classList.remove('open');
+            });
+        }
+
+        // 3. Click Outside Logic (Closes if tapped anywhere else)
+        if (sidebar && menuBtn) {
+            document.addEventListener('click', (event) => {
+                const isClickInsideSidebar = sidebar.contains(event.target);
+                const isClickOnHamburger = menuBtn.contains(event.target);
+
+                if (sidebar.classList.contains('open') && !isClickInsideSidebar && !isClickOnHamburger) {
+                    sidebar.classList.remove('open');
+                }
+            });
+        }
+
+        // --- B1.5: Ajustare automată înălțime textarea (Capped at 200px) ---
         const tx = document.getElementsByTagName("textarea");
         for (let i = 0; i < tx.length; i++) {
           tx[i].setAttribute("style", "height:" + (tx[i].scrollHeight) + "px;overflow-y:hidden;");
@@ -71,14 +138,59 @@
         }
 
         function OnInput() {
-          this.style.height = "auto";
-          this.style.height = (this.scrollHeight) + "px";
+            this.style.height = "auto";
+            let newHeight = this.scrollHeight;
+            
+            if (newHeight > 200) {
+                this.style.height = "200px";
+                this.style.overflowY = "auto"; // Show scrollbar
+            } else {
+                this.style.height = newHeight + "px";
+                this.style.overflowY = "hidden"; // Hide scrollbar
+            }
         }
-        // Derulare automată la ultimul mesaj
+        
+        // --- Derulare automată la ultimul mesaj ---
         const messagesWindow = document.querySelector('.messages-window');
         if (messagesWindow) {
             messagesWindow.scrollTop = messagesWindow.scrollHeight;
         }
+
+        // --- B1.3: Markdown Rendering & Sanitization ---
+        const aiMessages = document.querySelectorAll('.message.assistant');
+        aiMessages.forEach(msgElement => {
+            const rawText = msgElement.textContent;
+            const rawHTML = marked.parse(rawText);
+            const cleanHTML = DOMPurify.sanitize(rawHTML);
+            msgElement.innerHTML = cleanHTML;
+        });
+
+        // --- B1.6: Suggestion Chips Click Logic ---
+        const chips = document.querySelectorAll('.chip');
+        const textarea = document.querySelector('textarea[name="prompt"]');
+
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                textarea.value = chip.textContent;
+                // Force the textarea to resize based on the new text
+                textarea.dispatchEvent(new Event('input'));
+                textarea.focus();
+            });
+        });
+        // --- B1.7: Smart Enter Key Logic ---
+        const chatFormElem = document.querySelector('.input-container'); // Renamed slightly to avoid conflicts
+        
+        textarea.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); 
+                
+                if (this.value.trim() !== '') {
+                    // CHANGED: Instead of .submit(), we dispatch an event so our AJAX catches it!
+                    chatFormElem.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+                }
+            }
+        });
     </script>
+     <script src="{% static 'js/chat.js' %}"></script>
 </body>
 </html>
