@@ -150,6 +150,8 @@ def login_view(request):
         'form': form,
         'next': next_url,
     })
+
+
 @login_required
 def profile_view(request):
     return redirect('preferences')

@@ -34,13 +34,18 @@ class EmailChangeForm(forms.Form):
 
 
 class StyledPasswordChangeForm(PasswordChangeForm):
+    AUTOCOMPLETE = {
+        'old_password': 'current-password',
+        'new_password1': 'new-password',
+        'new_password2': 'new-password',
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs.update({
-                'class': 'profile-input',
-                'autocomplete': 'off',
-            })
+        for name, field in self.fields.items():
+            field.widget.attrs.update({'class': 'profile-input'})
+            if name in self.AUTOCOMPLETE:
+                field.widget.attrs['autocomplete'] = self.AUTOCOMPLETE[name]
 
 
 class DeleteAccountForm(forms.Form):
@@ -49,7 +54,7 @@ class DeleteAccountForm(forms.Form):
         widget=forms.PasswordInput(attrs={
             'class': 'profile-input',
             'placeholder': 'Parola ta',
-            'autocomplete': 'off',
+            'autocomplete': 'current-password',
         }),
     )
 
