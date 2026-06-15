@@ -25,9 +25,13 @@ from __future__ import annotations
 import importlib.util
 import logging
 import os
+import time
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
+# A3.3: dedicated logger for per-call LLM telemetry (writes to a log file; see
+# LOGGING in settings.py).
+llm_logger = logging.getLogger("agents.llm")
 
 # Sensible, env-overridable defaults. See .env.example.
 DEFAULT_PROVIDER = "anthropic"
@@ -36,6 +40,24 @@ DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 # Placeholders that mean "not configured" (see .env.example).
 _PLACEHOLDER_KEYS = {"", "replace-me", "your-key-here"}
+
+
+# --------------------------------------------------------------------------- #
+# A3.3 — per-call telemetry
+# --------------------------------------------------------------------------- #
+def _log_llm_call(provider, model, started, *, ok, tokens=None, error=None):
+    """Log one LLM call: provider, model, latency, token usage, success/fail."""
+    latency_ms = int((time.perf_counter() - started) * 1000)
+    if ok:
+        llm_logger.info(
+            "provider=%s model=%s latency_ms=%d ok=1 tokens=%s",
+            provider, model, latency_ms, tokens if tokens is not None else "-",
+        )
+    else:
+        llm_logger.warning(
+            "provider=%s model=%s latency_ms=%d ok=0 error=%s",
+            provider, model, latency_ms, error,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -69,18 +91,27 @@ class AnthropicClient(LLMClient):
     def complete(self, messages: list[dict], system: str) -> str:
         import anthropic  # lazy: only needed when actually calling the API
 
-        client = anthropic.Anthropic(api_key=self.api_key)
-        response = client.messages.create(
-            model=self.model,
-            system=system,
-            max_tokens=self.max_tokens,
-            messages=messages,
-        )
-        # response.content is a list of blocks; keep the text ones.
-        return "".join(
-            block.text for block in response.content
-            if getattr(block, "type", None) == "text"
-        ).strip()
+        started = time.perf_counter()
+        try:
+            client = anthropic.Anthropic(api_key=self.api_key)
+            response = client.messages.create(
+                model=self.model,
+                system=system,
+                max_tokens=self.max_tokens,
+                messages=messages,
+            )
+            # response.content is a list of blocks; keep the text ones.
+            text = "".join(
+                block.text for block in response.content
+                if getattr(block, "type", None) == "text"
+            ).strip()
+            usage = getattr(response, "usage", None)
+            tokens = (usage.input_tokens + usage.output_tokens) if usage else None
+            _log_llm_call("anthropic", self.model, started, ok=True, tokens=tokens)
+            return text
+        except Exception as exc:
+            _log_llm_call("anthropic", self.model, started, ok=False, error=exc)
+            raise
 
 
 class GeminiClient(LLMClient):
@@ -93,18 +124,27 @@ class GeminiClient(LLMClient):
     def complete(self, messages: list[dict], system: str) -> str:
         import google.generativeai as genai  # lazy
 
-        genai.configure(api_key=self.api_key)
-        model = genai.GenerativeModel(self.model, system_instruction=system)
-        # Gemini uses role "model" for the assistant and "parts" for content.
-        contents = [
-            {
-                "role": "model" if m["role"] == "assistant" else "user",
-                "parts": [m["content"]],
-            }
-            for m in messages
-        ]
-        response = model.generate_content(contents)
-        return (response.text or "").strip()
+        started = time.perf_counter()
+        try:
+            genai.configure(api_key=self.api_key)
+            model = genai.GenerativeModel(self.model, system_instruction=system)
+            # Gemini uses role "model" for the assistant and "parts" for content.
+            contents = [
+                {
+                    "role": "model" if m["role"] == "assistant" else "user",
+                    "parts": [m["content"]],
+                }
+                for m in messages
+            ]
+            response = model.generate_content(contents)
+            text = (response.text or "").strip()
+            usage = getattr(response, "usage_metadata", None)
+            tokens = getattr(usage, "total_token_count", None) if usage else None
+            _log_llm_call("gemini", self.model, started, ok=True, tokens=tokens)
+            return text
+        except Exception as exc:
+            _log_llm_call("gemini", self.model, started, ok=False, error=exc)
+            raise
 
 
 class EchoClient(LLMClient):
@@ -116,10 +156,12 @@ class EchoClient(LLMClient):
     """
 
     def complete(self, messages: list[dict], system: str) -> str:
+        started = time.perf_counter()
         last_user = next(
             (m["content"] for m in reversed(messages) if m["role"] == "user"),
             "",
         )
+        _log_llm_call("echo", "echo", started, ok=True, tokens=0)
         return (
             "🧭 *(răspuns demo — niciun model AI configurat)*\n\n"
             f"Am primit mesajul tău: **{last_user}**\n\n"

@@ -13,8 +13,12 @@ agents: the Concierge (Agent 1) produces the reply, then the Data Architect
 from __future__ import annotations
 
 import logging
+import threading
 
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.db import connection
+from django.utils import timezone
 
 from agents import concierge, data_architect
 from trips.models import ChatSession
@@ -66,21 +70,72 @@ def handle_user_message(prompt: str, session: ChatSession, user: User) -> str:
         logger.exception("Concierge failed for user=%s session=%s", user.pk, session.pk)
         return RATE_LIMIT_REPLY if _is_rate_limit(exc) else FALLBACK_REPLY
 
-    # Agent 2 runs synchronously but best-effort (A2.6): the user already has a
-    # valid reply, so extraction must never break the chat.
-    _update_preferences(history, preferences, user)
+    # Agent 2 is best-effort: the user already has a valid reply, so extraction
+    # must never break the chat. By default it runs off the request path (A3.1).
+    _run_data_architect(session, user)
     return reply
 
 
-def _update_preferences(history, preferences, user: User) -> None:
-    """Run the Data Architect and persist any inferred preference changes."""
+def _run_data_architect(session: ChatSession, user: User) -> None:
+    """Run the Data Architect, async (A3.1) or inline depending on settings."""
+    if getattr(settings, "AGENTS_RUN_ASYNC", True):
+        threading.Thread(
+            target=_update_preferences_threaded,
+            args=(session, user),
+            daemon=True,
+        ).start()
+    else:
+        _update_preferences(session, user)
+
+
+def _update_preferences_threaded(session: ChatSession, user: User) -> None:
+    """Thread entry point for A3.1: run extraction, then release the DB connection."""
     try:
+        _update_preferences(session, user)
+    finally:
+        # A new thread gets its own DB connection — close it or it leaks.
+        connection.close()
+
+
+def _update_preferences(session: ChatSession, user: User) -> None:
+    """Run the Data Architect and persist any inferred preference changes.
+
+    Self-contained (re-fetches its own context) so it is safe to run in a
+    background thread on a fresh DB connection.
+    """
+    try:
+        preferences, _ = UserPreference.objects.get_or_create(user=user)
+        recent = list(session.messages.order_by("-sent_at", "-id")[:HISTORY_LIMIT])
+        history = list(reversed(recent))
+
         validated = data_architect.extract_preferences(history)
         changed = data_architect.merge_preferences(preferences, validated)
-        if changed:
-            preferences.save(update_fields=changed)
-            # TODO (blocker A2.5/C2.2): once Branch C adds `ai_updated_fields`
-            # to UserPreference, record `changed` + timestamps there.
-            logger.info("Data Architect updated %s for user=%s", changed, user.pk)
+        if not changed:
+            return
+
+        update_fields = list(changed)
+        # A2.5/C2.2: stamp which fields the AI set (with timestamps) so the UI
+        # can show an "inferred from chat" badge (C2.3).
+        if _stamp_ai_fields(preferences, changed):
+            update_fields.append("ai_updated_fields")
+
+        preferences.save(update_fields=update_fields)
+        logger.info("Data Architect updated %s for user=%s", changed, user.pk)
     except Exception:
         logger.exception("Data Architect failed (non-fatal) for user=%s", user.pk)
+
+
+def _stamp_ai_fields(preferences, changed) -> bool:
+    """Record an ISO timestamp per AI-updated field in ``ai_updated_fields``.
+
+    Defensive: if the model doesn't have the field yet (Branch C migration not
+    landed), it's a no-op and returns False. Returns True if it stamped.
+    """
+    if not hasattr(preferences, "ai_updated_fields"):
+        return False
+    stamps = dict(preferences.ai_updated_fields or {})
+    now = timezone.now().isoformat()
+    for field in changed:
+        stamps[field] = now
+    preferences.ai_updated_fields = stamps
+    return True

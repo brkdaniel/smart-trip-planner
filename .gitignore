@@ -12,6 +12,9 @@ __pycache__/
 # Django
 *.sqlite3
 
+# Logs (A3.3 LLM call telemetry)
+logs/
+
 # OS files
 .DS_Store
 Thumbs.db

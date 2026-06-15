@@ -165,7 +165,11 @@ def preferences_view(request):
     if request.method == 'POST':
         form = PreferenceForm(request.POST, instance=prefs)
         if form.is_valid():
-            form.save()
+            pref = form.save(commit=False)
+            # C2.3: a field the user edited manually is no longer "inferred by AI".
+            for field_name in form.changed_data:
+                pref.ai_updated_fields.pop(field_name, None)
+            pref.save()
             if onboarding:
                 return redirect('chat')
             messages.success(request, 'Preferințele au fost salvate.')
@@ -177,6 +181,8 @@ def preferences_view(request):
         'form': form,
         'active_section': 'preferences',
         'onboarding': onboarding,
+        # C2.3: which fields were inferred by the AI (for the badge).
+        'ai_fields': list(prefs.ai_updated_fields.keys()),
     })
 
 

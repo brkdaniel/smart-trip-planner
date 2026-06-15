@@ -42,6 +42,7 @@
         </div>
 
         <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #4b5563; display: flex; flex-direction: column; gap: 12px;">
+            <a href="{% url 'trip_history' %}" class="sidebar-profile-link" style="color:#9ca3af; text-decoration:none;">🧳 Călătoriile mele</a>
             <a href="{% url 'profile' %}" class="sidebar-profile-link" style="color:#9ca3af; text-decoration:none;">⚙ Profil &amp; setări</a>
             <form action="{% url 'logout' %}" method="post">
                 {% csrf_token %}
@@ -59,9 +60,17 @@
         <div class="messages-window">
             {% if not messages %}
                 <div class="empty-state">
-                    <h1 style="color: #1f2937;">Unde vrei să călătorești?</h1>
-                    <p>Sunt asistentul tău Trippi. Spune-mi o destinație sau un buget!</p>
-                    
+                    {% if preferences.interests or preferences.dietary_preference or preferences.budget %}
+                        <h1 style="color: #1f2937;">Bine ai revenit, {{ request.user.username }}! 👋</h1>
+                        <p>
+                            Țin minte ce-ți place{% if preferences.interests %} ({{ preferences.interests }}){% endif %}.
+                            Hai să planificăm următoarea ta călătorie!
+                        </p>
+                    {% else %}
+                        <h1 style="color: #1f2937;">Unde vrei să călătorești?</h1>
+                        <p>Sunt asistentul tău Trippi. Spune-mi o destinație sau un buget!</p>
+                    {% endif %}
+
                     <div class="suggestion-chips">
                         <button class="chip">Planifică un city break în Roma</button>
                         <button class="chip">Vacanță la mare cu buget redus</button>

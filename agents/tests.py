@@ -11,9 +11,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth.models import User
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 
-from agents import concierge, data_architect, orchestrator
+from agents import concierge, data_architect, orchestrator, planner
 from agents.llm_client import (
     AnthropicClient,
     EchoClient,
@@ -21,6 +21,7 @@ from agents.llm_client import (
     LLMClient,
     make_llm_client,
 )
+from agents.tools.base import Tool, fail, ok
 
 
 class RecordingClient(LLMClient):
@@ -126,6 +127,7 @@ class ConciergeTests(SimpleTestCase):
 # --------------------------------------------------------------------------- #
 # Orchestrator (Facade) — needs the DB
 # --------------------------------------------------------------------------- #
+@override_settings(AGENTS_RUN_ASYNC=False)  # run Data Architect inline for determinism
 class OrchestratorTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="ana", password="pw")
@@ -186,6 +188,8 @@ class OrchestratorTests(TestCase):
             orchestrator.handle_user_message("vreau hotel de 5 stele", self.session, self.user)
         self.user.preferences.refresh_from_db()
         self.assertEqual(self.user.preferences.hotel_stars, 5)
+        # A2.5: the AI write is stamped for the "inferred from chat" badge.
+        self.assertIn("hotel_stars", self.user.preferences.ai_updated_fields)
 
 
 class OrchestratorHelperTests(SimpleTestCase):
@@ -195,6 +199,182 @@ class OrchestratorHelperTests(SimpleTestCase):
 
     def test_other_errors_are_not_rate_limit(self):
         self.assertFalse(orchestrator._is_rate_limit(ValueError("bad json")))
+
+    def test_stamps_ai_updated_fields(self):
+        prefs = SimpleNamespace(ai_updated_fields={"budget": "old-ts"})
+        stamped = orchestrator._stamp_ai_fields(prefs, ["hotel_stars", "interests"])
+        self.assertTrue(stamped)
+        self.assertEqual(set(prefs.ai_updated_fields), {"budget", "hotel_stars", "interests"})
+        self.assertNotEqual(prefs.ai_updated_fields["hotel_stars"], "")
+        self.assertEqual(prefs.ai_updated_fields["budget"], "old-ts")  # untouched
+
+    def test_stamp_is_noop_without_field(self):
+        prefs = SimpleNamespace()  # model without ai_updated_fields (pre-migration)
+        self.assertFalse(orchestrator._stamp_ai_fields(prefs, ["hotel_stars"]))
+
+
+# --------------------------------------------------------------------------- #
+# A3.1 — async routing of the Data Architect
+# --------------------------------------------------------------------------- #
+class AsyncDataArchitectTests(SimpleTestCase):
+    @override_settings(AGENTS_RUN_ASYNC=True)
+    def test_async_spawns_daemon_thread(self):
+        with mock.patch.object(orchestrator.threading, "Thread") as Thread:
+            orchestrator._run_data_architect(object(), object())
+            Thread.assert_called_once()
+            self.assertTrue(Thread.call_args.kwargs.get("daemon"))
+            Thread.return_value.start.assert_called_once()
+
+    @override_settings(AGENTS_RUN_ASYNC=False)
+    def test_sync_runs_inline_without_thread(self):
+        with mock.patch.object(orchestrator, "_update_preferences") as upd, \
+                mock.patch.object(orchestrator.threading, "Thread") as Thread:
+            orchestrator._run_data_architect("s", "u")
+            upd.assert_called_once_with("s", "u")
+            Thread.assert_not_called()
+
+    def test_threaded_wrapper_closes_connection(self):
+        with mock.patch.object(orchestrator, "_update_preferences"), \
+                mock.patch.object(orchestrator.connection, "close") as close:
+            orchestrator._update_preferences_threaded("s", "u")
+            close.assert_called_once()
+
+
+# --------------------------------------------------------------------------- #
+# A3.3 — per-call LLM telemetry
+# --------------------------------------------------------------------------- #
+class LlmLoggingTests(SimpleTestCase):
+    def test_successful_call_is_logged(self):
+        from agents.llm_client import EchoClient
+        with self.assertLogs("agents.llm", level="INFO") as cm:
+            EchoClient().complete([{"role": "user", "content": "hi"}], "s")
+        line = " ".join(cm.output)
+        self.assertIn("provider=echo", line)
+        self.assertIn("ok=1", line)
+        self.assertIn("latency_ms=", line)
+
+    def test_failed_call_is_logged(self):
+        import time as _time
+        from agents.llm_client import _log_llm_call
+        with self.assertLogs("agents.llm", level="WARNING") as cm:
+            _log_llm_call("gemini", "m", _time.perf_counter(), ok=False, error=RuntimeError("boom"))
+        line = " ".join(cm.output)
+        self.assertIn("ok=0", line)
+        self.assertIn("boom", line)
+
+
+# --------------------------------------------------------------------------- #
+# A3.4 — tool planner
+# --------------------------------------------------------------------------- #
+class PlannerTests(SimpleTestCase):
+    def _h(self, text):
+        return [SimpleNamespace(role="user", content=text)]
+
+    def test_keyword_gate(self):
+        self.assertTrue(planner.needs_tool("vreau un zbor la Roma"))
+        self.assertTrue(planner.needs_tool("ce hotel recomanzi?"))
+        self.assertFalse(planner.needs_tool("ce să vizitez în Roma?"))
+
+    def test_no_llm_call_without_keywords(self):
+        client = RecordingClient(reply='{"tool":"flights","params":{}}')
+        out = planner.plan_tool(self._h("ce să vizitez?"), client=client)
+        self.assertEqual(out["tool"], None)
+        self.assertIsNone(client.messages)  # planner never called the LLM
+
+    def test_extracts_tool_and_params(self):
+        client = RecordingClient(reply='{"tool":"flights","params":{"from":"București","to":"Roma"}}')
+        out = planner.plan_tool(self._h("vreau un zbor la Roma"), client=client)
+        self.assertEqual(out["tool"], "flights")
+        self.assertEqual(out["params"]["to"], "Roma")
+
+    def test_rejects_unknown_tool(self):
+        client = RecordingClient(reply='{"tool":"weather","params":{}}')
+        self.assertEqual(planner.plan_tool(self._h("vreau un zbor"), client=client)["tool"], None)
+
+    def test_handles_malformed_json(self):
+        client = RecordingClient(reply="nu pot ajuta")
+        self.assertEqual(planner.plan_tool(self._h("vreau un hotel"), client=client)["tool"], None)
+
+
+# --------------------------------------------------------------------------- #
+# A3.4 — tool context in the Concierge
+# --------------------------------------------------------------------------- #
+class _FakeTool(Tool):
+    name = "flights"
+
+    def __init__(self, result):
+        self._result = result
+
+    def run(self, params):
+        return self._result
+
+
+class ToolContextTests(SimpleTestCase):
+    _SAMPLE = [{"title": "Wizz Air BUH→FCO", "summary": "10 iul 06:20→07:40",
+                "price": 49, "currency": "EUR", "link": "http://x"}]
+
+    def test_formats_real_results(self):
+        with mock.patch.object(concierge.planner, "plan_tool",
+                               return_value={"tool": "flights", "params": {}}), \
+                mock.patch.object(concierge, "get_tool", return_value=_FakeTool(ok(self._SAMPLE))):
+            ctx = concierge._gather_tool_context([SimpleNamespace(role="user", content="zbor")])
+        self.assertIn("DATE REALE", ctx)
+        self.assertIn("Wizz Air", ctx)
+        self.assertIn("49", ctx)
+
+    def test_empty_when_planner_returns_none(self):
+        with mock.patch.object(concierge.planner, "plan_tool", return_value={"tool": None, "params": {}}):
+            self.assertEqual(concierge._gather_tool_context([]), "")
+
+    def test_empty_when_tool_not_registered(self):
+        with mock.patch.object(concierge.planner, "plan_tool",
+                               return_value={"tool": "flights", "params": {}}), \
+                mock.patch.object(concierge, "get_tool", return_value=None):
+            self.assertEqual(concierge._gather_tool_context([SimpleNamespace(role="user", content="zbor")]), "")
+
+    def test_empty_when_tool_fails(self):
+        with mock.patch.object(concierge.planner, "plan_tool",
+                               return_value={"tool": "flights", "params": {}}), \
+                mock.patch.object(concierge, "get_tool", return_value=_FakeTool(fail("boom"))):
+            self.assertEqual(concierge._gather_tool_context([SimpleNamespace(role="user", content="zbor")]), "")
+
+
+class RapidApiHelperTests(SimpleTestCase):
+    @override_settings(RAPIDAPI_KEY="", RAPIDAPI_FLIGHTS_HOST="")
+    def test_returns_none_when_not_configured(self):
+        from agents.tools.rapidapi import rapidapi_get
+        self.assertIsNone(rapidapi_get("", "/search", {}))
+
+
+class HotelToolTests(SimpleTestCase):
+    def _tool(self):
+        from agents.tools.hotels import HotelSearchTool
+        return HotelSearchTool()
+
+    def test_normalizes_search_results(self):
+        ac = {"data": [{"id": "TOKEN"}]}
+        search = {"data": [{
+            "name": "Hotel X", "reviewScore": 9.1, "reviewScoreWord": "Superb",
+            "accuratePropertyClass": 4, "wishlistName": "Rome",
+            "priceBreakdown": {"grossPrice": {"value": 413.41, "currency": "EUR"}},
+        }]}
+        with mock.patch("agents.tools.hotels.rapidapi_get", side_effect=[ac, search]):
+            out = self._tool().run({"city": "Roma", "checkin": "2026-07-10",
+                                    "checkout": "2026-07-12", "adults": 2})
+        self.assertTrue(out["ok"])
+        r = out["results"][0]
+        self.assertEqual(r["title"], "Hotel X")
+        self.assertEqual(r["price"], 413)
+        self.assertEqual(r["currency"], "EUR")
+        self.assertIn("4★", r["summary"])
+
+    def test_missing_params(self):
+        self.assertFalse(self._tool().run({"city": "Roma"})["ok"])
+
+    def test_location_not_found(self):
+        with mock.patch("agents.tools.hotels.rapidapi_get", return_value={"data": []}):
+            self.assertFalse(self._tool().run(
+                {"city": "X", "checkin": "a", "checkout": "b"})["ok"])
 
 
 # --------------------------------------------------------------------------- #

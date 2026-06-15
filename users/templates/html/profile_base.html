@@ -29,6 +29,8 @@
           <p class="profile-user">{{ request.user.username }}</p>
 
           <nav class="profile-menu">
+            <a href="{% url 'trip_history' %}"
+               class="profile-menu-link {% if active_section == 'trips' %}active{% endif %}">Călătoriile mele</a>
             <a href="{% url 'preferences' %}"
                class="profile-menu-link {% if active_section == 'preferences' %}active{% endif %}">Preferințe</a>
             <a href="{% url 'change_email' %}"

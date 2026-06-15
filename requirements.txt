@@ -10,3 +10,6 @@ sqlparse==0.5.5
 # absent or no API key is set.
 anthropic==0.40.0
 google-generativeai==0.8.3
+
+# --- A3.4: real flight/hotel data via RapidAPI ---
+requests==2.34.2
