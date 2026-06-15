@@ -5,10 +5,8 @@ python-dotenv==1.2.2
 sqlparse==0.5.5
 
 # --- AI agents (Branch A) ---
-# Concierge agent uses Anthropic Claude; Data Architect (Week 2) uses Gemini.
-# Optional at runtime: the app falls back to an offline client if these are
-# absent or no API key is set.
-anthropic==0.40.0
+# Both agents (Concierge + Data Architect) use Google Gemini. Optional at
+# runtime: the app falls back to an offline client if the key/SDK is absent.
 google-generativeai==0.8.3
 
 # --- A3.4: real flight/hotel data via RapidAPI ---

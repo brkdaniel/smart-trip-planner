@@ -20,13 +20,23 @@ logger = logging.getLogger("agents.tools")
 DEFAULT_TIMEOUT = 12  # seconds
 
 
-def rapidapi_get(host: str, path: str, params: dict, timeout: int = DEFAULT_TIMEOUT) -> dict | None:
+def rapidapi_get(
+    host: str,
+    path: str,
+    params: dict,
+    timeout: int = DEFAULT_TIMEOUT,
+    key: str | None = None,
+) -> dict | None:
     """GET ``https://{host}{path}?{params}`` with RapidAPI auth headers.
 
     Returns the decoded JSON dict/list on HTTP 200, else ``None``. Logs the call.
     Some endpoints (hotel search) are slow — pass a larger ``timeout``.
+
+    ``key`` overrides the default ``RAPIDAPI_KEY`` for listings on a separate
+    subscription (e.g. flights via google-flights2).
     """
-    key = getattr(settings, "RAPIDAPI_KEY", "")
+    if key is None:
+        key = getattr(settings, "RAPIDAPI_KEY", "")
     if not key or not host or not path:
         logger.warning("tool=rapidapi host=%s ok=0 error=not-configured", host or "-")
         return None

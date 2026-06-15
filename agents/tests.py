@@ -15,7 +15,6 @@ from django.test import SimpleTestCase, TestCase, override_settings
 
 from agents import concierge, data_architect, orchestrator, planner
 from agents.llm_client import (
-    AnthropicClient,
     EchoClient,
     GeminiClient,
     LLMClient,
@@ -56,20 +55,11 @@ class EchoClientTests(SimpleTestCase):
 class FactoryTests(SimpleTestCase):
     def test_falls_back_to_echo_without_key(self):
         with mock.patch.dict("os.environ", {}, clear=True):
-            self.assertIsInstance(make_llm_client("anthropic"), EchoClient)
-
-    def test_unknown_provider_falls_back_to_echo(self):
-        with mock.patch.dict("os.environ", {}, clear=True):
-            self.assertIsInstance(make_llm_client("does-not-exist"), EchoClient)
+            self.assertIsInstance(make_llm_client(), EchoClient)
 
     def test_placeholder_key_is_treated_as_missing(self):
-        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "replace-me"}, clear=True):
-            self.assertIsInstance(make_llm_client("anthropic"), EchoClient)
-
-    def test_returns_anthropic_when_key_and_sdk_present(self):
-        with mock.patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=True), \
-                mock.patch("agents.llm_client._module_available", return_value=True):
-            self.assertIsInstance(make_llm_client("anthropic"), AnthropicClient)
+        with mock.patch.dict("os.environ", {"GOOGLE_API_KEY": "replace-me"}, clear=True):
+            self.assertIsInstance(make_llm_client(), EchoClient)
 
     def test_returns_gemini_when_key_and_sdk_present(self):
         with mock.patch.dict("os.environ", {"GOOGLE_API_KEY": "g-test"}, clear=True), \

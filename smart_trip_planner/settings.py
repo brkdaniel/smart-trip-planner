@@ -143,6 +143,9 @@ AGENTS_RUN_ASYNC = True
 # A3.4: RapidAPI-backed tools for real flight/hotel data (Concierge tools).
 # All optional: without a key the Concierge falls back to estimate-based answers.
 RAPIDAPI_KEY = os.getenv('RAPIDAPI_KEY', '')
+# Flights use a separate listing (google-flights2) with its own subscription, so
+# they get their own key; falls back to RAPIDAPI_KEY if unset.
+RAPIDAPI_FLIGHTS_KEY = os.getenv('RAPIDAPI_FLIGHTS_KEY', '') or RAPIDAPI_KEY
 RAPIDAPI_FLIGHTS_HOST = os.getenv('RAPIDAPI_FLIGHTS_HOST', '')
 RAPIDAPI_HOTELS_HOST = os.getenv('RAPIDAPI_HOTELS_HOST', '')
 # Endpoint paths (defaults filled after probing the chosen listings).

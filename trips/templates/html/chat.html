@@ -28,10 +28,12 @@
             <button id="close-menu-btn" class="close-btn">✖ Închide</button>
         </div>
 
-        <a href="{% url 'chat' %}" class="new-chat-btn">+ Chat Nou</a>
-        
+        <div class="sidebar-brand">🧭 Trippi</div>
+
+        <a href="{% url 'chat' %}" class="new-chat-btn">+ Chat nou</a>
+
         <div class="session-list">
-            <p style="font-size: 0.75rem; color: #9ca3af; text-transform: uppercase; margin-bottom: 10px;">Istoric Recente</p>
+            <p class="session-list-heading">Istoric recente</p>
             {% for s in sessions %}
                 <div class="session-item {% if s.id == current_session.id %}active{% endif %}"
                      data-session-id="{{ s.id }}"
@@ -41,12 +43,11 @@
             {% endfor %}
         </div>
 
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #4b5563; display: flex; flex-direction: column; gap: 12px;">
-            <a href="{% url 'trip_history' %}" class="sidebar-profile-link" style="color:#9ca3af; text-decoration:none;">🧳 Călătoriile mele</a>
-            <a href="{% url 'profile' %}" class="sidebar-profile-link" style="color:#9ca3af; text-decoration:none;">⚙ Profil &amp; setări</a>
+        <div class="sidebar-footer">
+            <a href="{% url 'profile' %}" class="sidebar-profile-link">⚙ Profil &amp; setări</a>
             <form action="{% url 'logout' %}" method="post">
                 {% csrf_token %}
-                <button type="submit" style="background:none; border:none; color:#9ca3af; cursor:pointer;">Logout</button>
+                <button type="submit" class="sidebar-logout-btn">Logout</button>
             </form>
         </div>
     </aside>
@@ -61,13 +62,13 @@
             {% if not messages %}
                 <div class="empty-state">
                     {% if preferences.interests or preferences.dietary_preference or preferences.budget %}
-                        <h1 style="color: #1f2937;">Bine ai revenit, {{ request.user.username }}! 👋</h1>
+                        <h1>Bine ai revenit, {{ request.user.username }}! 👋</h1>
                         <p>
                             Țin minte ce-ți place{% if preferences.interests %} ({{ preferences.interests }}){% endif %}.
                             Hai să planificăm următoarea ta călătorie!
                         </p>
                     {% else %}
-                        <h1 style="color: #1f2937;">Unde vrei să călătorești?</h1>
+                        <h1>Unde vrei să călătorești?</h1>
                         <p>Sunt asistentul tău Trippi. Spune-mi o destinație sau un buget!</p>
                     {% endif %}
 

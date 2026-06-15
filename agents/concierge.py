@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "concierge.md"
 
-# The Concierge's provider is resolved by the factory from the LLM_PROVIDER env
-# var (default "anthropic"). Set LLM_PROVIDER=gemini in .env to use Gemini.
+# The Concierge's provider is Google Gemini, built by the factory
+# (make_llm_client). Needs GOOGLE_API_KEY in .env; falls back to EchoClient.
 
 
 @lru_cache(maxsize=1)
@@ -125,4 +125,17 @@ def generate_reply(prompt: str, history, preferences, client: LLMClient | None =
     if not messages:  # defensive: empty history → use the raw prompt
         messages = [{"role": "user", "content": prompt}]
 
-    return client.complete(messages, system)
+    try:
+        return client.complete(messages, system)
+    except Exception:
+        # Provider failure (quota, outage, network) must not 500 the chat.
+        # We only reach here when a *real* provider (Anthropic/Gemini) raised —
+        # EchoClient never raises — so a model WAS configured; it just failed.
+        # Return an honest "temporarily unavailable" message rather than the
+        # EchoClient's "no model configured / add an API key" demo text.
+        logger.exception("Concierge provider call failed — degrading gracefully.")
+        return (
+            "🛠️ Asistentul AI este momentan indisponibil (probabil limita de "
+            "utilizare a fost atinsă). Te rog încearcă din nou peste câteva "
+            "minute."
+        )
