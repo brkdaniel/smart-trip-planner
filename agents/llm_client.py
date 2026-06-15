@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Sensible, env-overridable defaults. See .env.example.
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 # Placeholders that mean "not configured" (see .env.example).
 _PLACEHOLDER_KEYS = {"", "replace-me", "your-key-here"}

@@ -6,13 +6,14 @@ key or network is needed. The provider-agnostic Strategy interface is exactly
 what makes this dependency injection possible.
 """
 
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import SimpleTestCase, TestCase
 
-from agents import concierge, orchestrator
+from agents import concierge, data_architect, orchestrator
 from agents.llm_client import (
     AnthropicClient,
     EchoClient,
@@ -135,11 +136,12 @@ class OrchestratorTests(TestCase):
         from trips.models import ChatMessage
         return ChatMessage.objects.create(session=self.session, role=role, content=content)
 
-    def test_returns_reply_offline(self):
+    def test_returns_concierge_reply(self):
         self._add("user", "Vreau la Veneția")
-        reply = orchestrator.handle_user_message("Vreau la Veneția", self.session, self.user)
-        self.assertIsInstance(reply, str)
-        self.assertTrue(reply)
+        with mock.patch.object(concierge, "generate_reply", return_value="R"), \
+                mock.patch.object(data_architect, "extract_preferences", return_value={}):
+            reply = orchestrator.handle_user_message("Vreau la Veneția", self.session, self.user)
+        self.assertEqual(reply, "R")
 
     def test_history_is_chronological_without_duplicating_prompt(self):
         self._add("user", "u1")
@@ -152,7 +154,8 @@ class OrchestratorTests(TestCase):
             captured["history"] = [(m.role, m.content) for m in history]
             return "ok"
 
-        with mock.patch.object(concierge, "generate_reply", side_effect=fake):
+        with mock.patch.object(concierge, "generate_reply", side_effect=fake), \
+                mock.patch.object(data_architect, "extract_preferences", return_value={}):
             out = orchestrator.handle_user_message("u2", self.session, self.user)
 
         self.assertEqual(out, "ok")
@@ -163,8 +166,119 @@ class OrchestratorTests(TestCase):
         # the current prompt appears exactly once
         self.assertEqual(captured["history"].count(("user", "u2")), 1)
 
-    def test_failure_returns_friendly_fallback(self):
+    def test_concierge_failure_returns_friendly_fallback(self):
         self._add("user", "boom")
         with mock.patch.object(concierge, "generate_reply", side_effect=RuntimeError("x")):
             reply = orchestrator.handle_user_message("boom", self.session, self.user)
         self.assertEqual(reply, orchestrator.FALLBACK_REPLY)
+
+    def test_data_architect_failure_does_not_break_reply(self):
+        self._add("user", "boom")
+        with mock.patch.object(concierge, "generate_reply", return_value="R"), \
+                mock.patch.object(data_architect, "extract_preferences", side_effect=RuntimeError("x")):
+            reply = orchestrator.handle_user_message("boom", self.session, self.user)
+        self.assertEqual(reply, "R")  # Concierge reply preserved (A2.6)
+
+    def test_data_architect_persists_inferred_preferences(self):
+        self._add("user", "vreau hotel de 5 stele")
+        with mock.patch.object(concierge, "generate_reply", return_value="R"), \
+                mock.patch.object(data_architect, "extract_preferences", return_value={"hotel_stars": 5}):
+            orchestrator.handle_user_message("vreau hotel de 5 stele", self.session, self.user)
+        self.user.preferences.refresh_from_db()
+        self.assertEqual(self.user.preferences.hotel_stars, 5)
+
+
+class OrchestratorHelperTests(SimpleTestCase):
+    def test_detects_rate_limit_errors(self):
+        self.assertTrue(orchestrator._is_rate_limit(RuntimeError("429 quota exceeded")))
+        self.assertTrue(orchestrator._is_rate_limit(Exception("ResourceExhausted")))
+
+    def test_other_errors_are_not_rate_limit(self):
+        self.assertFalse(orchestrator._is_rate_limit(ValueError("bad json")))
+
+
+# --------------------------------------------------------------------------- #
+# Data Architect — extraction + validation (offline)
+# --------------------------------------------------------------------------- #
+class DataArchitectExtractionTests(SimpleTestCase):
+    def test_strips_code_fences_and_parses(self):
+        client = RecordingClient(reply='```json\n{"hotel_stars": 4}\n```')
+        out = data_architect.extract_preferences([], client=client)
+        self.assertEqual(out, {"hotel_stars": 4})
+
+    def test_malformed_json_returns_empty(self):
+        client = RecordingClient(reply="îmi pare rău, nu pot")
+        self.assertEqual(data_architect.extract_preferences([], client=client), {})
+
+
+class ValidationTests(SimpleTestCase):
+    def test_drops_unknown_keys(self):
+        out = data_architect.validate({"hotel_stars": 3, "evil": "x", "country": "IT"})
+        self.assertEqual(out, {"hotel_stars": 3})
+
+    def test_hotel_stars_clamped_to_1_5(self):
+        self.assertNotIn("hotel_stars", data_architect.validate({"hotel_stars": 6}))
+        self.assertNotIn("hotel_stars", data_architect.validate({"hotel_stars": 0}))
+        self.assertNotIn("hotel_stars", data_architect.validate({"hotel_stars": "abc"}))
+        self.assertEqual(data_architect.validate({"hotel_stars": 4})["hotel_stars"], 4)
+
+    def test_travel_pace_validated_and_mapped(self):
+        self.assertNotIn("travel_pace", data_architect.validate({"travel_pace": "turbo"}))
+        self.assertEqual(data_architect.validate({"travel_pace": "relaxat"})["travel_pace"], "slow")
+        self.assertEqual(data_architect.validate({"travel_pace": "FAST"})["travel_pace"], "fast")
+
+    def test_budget_coerced_to_positive_decimal(self):
+        self.assertEqual(data_architect.validate({"budget": "800"})["budget"], Decimal("800"))
+        self.assertNotIn("budget", data_architect.validate({"budget": -5}))
+        self.assertNotIn("budget", data_architect.validate({"budget": "lots"}))
+
+    def test_interests_list_joined_and_empty_dropped(self):
+        self.assertEqual(
+            data_architect.validate({"interests": ["muzee", "plajă"]})["interests"],
+            "muzee, plajă",
+        )
+        self.assertNotIn("interests", data_architect.validate({"interests": "   "}))
+
+    def test_nulls_are_dropped(self):
+        out = data_architect.validate(
+            {"dietary_preference": None, "hotel_stars": None, "travel_pace": None,
+             "budget": None, "interests": None}
+        )
+        self.assertEqual(out, {})
+
+
+# --------------------------------------------------------------------------- #
+# Data Architect — merge strategy (offline)
+# --------------------------------------------------------------------------- #
+class MergeTests(SimpleTestCase):
+    def _prefs(self):
+        return SimpleNamespace(
+            dietary_preference="", hotel_stars=3, travel_pace="medium",
+            budget=None, interests="",
+        )
+
+    def test_overwrites_differing_value(self):
+        prefs = self._prefs()
+        changed = data_architect.merge_preferences(prefs, {"hotel_stars": 5})
+        self.assertEqual(changed, ["hotel_stars"])
+        self.assertEqual(prefs.hotel_stars, 5)
+
+    def test_skips_equal_value(self):
+        prefs = self._prefs()
+        changed = data_architect.merge_preferences(prefs, {"travel_pace": "medium"})
+        self.assertEqual(changed, [])
+        self.assertEqual(prefs.travel_pace, "medium")
+
+    def test_never_nulls_out_existing(self):
+        prefs = self._prefs()
+        prefs.interests = "ski"
+        changed = data_architect.merge_preferences(prefs, {})  # nothing inferred
+        self.assertEqual(changed, [])
+        self.assertEqual(prefs.interests, "ski")
+
+    def test_reports_all_changed_fields(self):
+        prefs = self._prefs()
+        changed = data_architect.merge_preferences(
+            prefs, {"hotel_stars": 4, "interests": "muzee", "travel_pace": "slow"}
+        )
+        self.assertEqual(set(changed), {"hotel_stars", "interests", "travel_pace"})
