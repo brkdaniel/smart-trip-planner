@@ -1,10 +1,13 @@
 from django import forms
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
+from .models import UserPreference
+from .forms import PreferenceForm
 
 
 class SignupForm(UserCreationForm):
@@ -96,7 +99,7 @@ def signup_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            return redirect('chat')
+            return redirect('preferences')
     else:
         form = SignupForm()
     return render(request, 'html/signup.html', {'form': form})
@@ -140,6 +143,19 @@ def login_view(request):
         'form': form,
         'next': next_url,
     })
+@login_required
+def preferences_view(request):
+    prefs, _ = UserPreference.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        form = PreferenceForm(request.POST, instance=prefs)
+        if form.is_valid():
+            form.save()
+            return redirect('chat')
+    else:
+        form = PreferenceForm(instance=prefs)
+
+    return render(request, 'html/preferences.html', {'form': form})
 
 
 

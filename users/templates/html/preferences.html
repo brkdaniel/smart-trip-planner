@@ -1,0 +1,52 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" href="{% static 'favicon/favicon-96x96.png' %}" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
+  <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
+  <meta name="apple-mobile-web-app-title" content="Trippi" />
+  <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
+  <title>Trippi | Preferințe</title>
+  <link rel="stylesheet" href="{% static 'css/preferences.css' %}">
+</head>
+<body>
+  <div class="preferences-shell">
+    <div class="preferences-background" aria-hidden="true">
+      <video autoplay muted loop playsinline>
+        <source src="{% static 'home.mp4' %}" type="video/mp4">
+      </video>
+      <div class="preferences-overlay"></div>
+    </div>
+
+    <main class="preferences-main">
+      <section class="preferences-card" aria-label="Preferences">
+        <p class="brand">Trippi</p>
+        <h1>Spune-ne ce-ți place.</h1>
+        <p class="subtitle">Cu cât știm mai multe, cu atât planificăm mai bine.</p>
+        <form method="post" class="preferences-form">
+          {% csrf_token %}
+
+          {% for field in form %}
+            <label>
+              <span>{{ field.label }}</span>
+              {{ field }}
+              {% if field.help_text %}
+                <small class="helptext">{{ field.help_text }}</small>
+              {% endif %}
+              {% if field.errors %}
+                <small class="field-error">{{ field.errors.0 }}</small>
+              {% endif %}
+            </label>
+          {% endfor %}
+
+          <button type="submit" class="preferences-button">SALVEAZĂ</button>
+        </form>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
