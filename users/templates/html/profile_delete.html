@@ -1,0 +1,27 @@
+{% extends 'html/profile_base.html' %}
+
+{% block title %}Șterge contul{% endblock %}
+{% block heading %}Șterge contul{% endblock %}
+{% block card_heading %}Șterge-ți contul.{% endblock %}
+{% block card_subtitle %}
+  <p class="subtitle danger-text">Această acțiune este permanentă. Toate conversațiile și preferințele tale vor fi șterse definitiv.</p>
+{% endblock %}
+
+{% block content %}
+  <form method="post" class="profile-form"
+        onsubmit="return confirm('Sigur vrei să ștergi contul? Această acțiune nu poate fi anulată.');">
+    {% csrf_token %}
+
+    {% for field in form %}
+      <label>
+        <span>{{ field.label }}</span>
+        {{ field }}
+        {% if field.errors %}
+          <small class="field-error">{{ field.errors.0 }}</small>
+        {% endif %}
+      </label>
+    {% endfor %}
+
+    <button type="submit" class="profile-button profile-button-danger">ȘTERGE CONTUL DEFINITIV</button>
+  </form>
+{% endblock %}

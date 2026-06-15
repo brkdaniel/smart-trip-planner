@@ -1,0 +1,67 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="icon" type="image/png" href="{% static 'favicon/favicon-96x96.png' %}" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="{% static 'favicon/favicon.svg' %}" />
+  <link rel="shortcut icon" href="{% static 'favicon/favicon.ico' %}" />
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'favicon/apple-touch-icon.png' %}" />
+  <meta name="apple-mobile-web-app-title" content="Trippi" />
+  <link rel="manifest" href="{% static 'favicon/site.webmanifest' %}" />
+  <title>Trippi | {% block title %}Profil{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/profile.css' %}">
+</head>
+<body>
+  <div class="profile-shell">
+    <div class="profile-background" aria-hidden="true">
+      <video autoplay muted loop playsinline>
+        <source src="{% static 'home.mp4' %}" type="video/mp4">
+      </video>
+      <div class="profile-overlay"></div>
+    </div>
+
+    <main class="profile-main">
+      <div class="profile-layout">
+        <aside class="profile-nav" aria-label="Profil">
+          <p class="brand">Trippi</p>
+          <p class="profile-user">{{ request.user.username }}</p>
+
+          <nav class="profile-menu">
+            <a href="{% url 'preferences' %}"
+               class="profile-menu-link {% if active_section == 'preferences' %}active{% endif %}">Preferințe</a>
+            <a href="{% url 'change_email' %}"
+               class="profile-menu-link {% if active_section == 'email' %}active{% endif %}">Schimbă emailul</a>
+            <a href="{% url 'change_password' %}"
+               class="profile-menu-link {% if active_section == 'password' %}active{% endif %}">Schimbă parola</a>
+            <a href="{% url 'delete_account' %}"
+               class="profile-menu-link danger {% if active_section == 'delete' %}active{% endif %}">Șterge contul</a>
+          </nav>
+
+          <div class="profile-nav-footer">
+            <a href="{% url 'chat' %}" class="profile-back-link">← Înapoi la chat</a>
+            <form action="{% url 'logout' %}" method="post">
+              {% csrf_token %}
+              <button type="submit" class="profile-logout-btn">Logout</button>
+            </form>
+          </div>
+        </aside>
+
+        <section class="profile-card" aria-label="{% block heading %}Profil{% endblock %}">
+          {% if messages %}
+            {% for message in messages %}
+              <div class="saved-msg">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+
+          <h1>{% block card_heading %}Profil{% endblock %}</h1>
+          {% block card_subtitle %}{% endblock %}
+
+          {% block content %}{% endblock %}
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
