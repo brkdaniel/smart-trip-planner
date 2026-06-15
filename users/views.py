@@ -1,10 +1,20 @@
 from django import forms
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, logout
+from django.contrib import messages
+from django.contrib.auth import login, logout, update_session_auth_hash
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
+from .models import UserPreference
+from .forms import (
+    PreferenceForm,
+    EmailChangeForm,
+    StyledPasswordChangeForm,
+    DeleteAccountForm,
+)
 
 
 class SignupForm(UserCreationForm):
@@ -96,7 +106,7 @@ def signup_view(request):
         if form.is_valid():
             user = form.save()
             login(request, user)
-            return redirect('chat')
+            return redirect(f"{reverse('preferences')}?onboarding=1")
     else:
         form = SignupForm()
     return render(request, 'html/signup.html', {'form': form})
@@ -141,6 +151,87 @@ def login_view(request):
         'next': next_url,
     })
 
+
+@login_required
+def profile_view(request):
+    return redirect('preferences')
+
+
+@login_required
+def preferences_view(request):
+    prefs, _ = UserPreference.objects.get_or_create(user=request.user)
+    onboarding = request.GET.get('onboarding') == '1'
+
+    if request.method == 'POST':
+        form = PreferenceForm(request.POST, instance=prefs)
+        if form.is_valid():
+            form.save()
+            if onboarding:
+                return redirect('chat')
+            messages.success(request, 'Preferințele au fost salvate.')
+            return redirect('preferences')
+    else:
+        form = PreferenceForm(instance=prefs)
+
+    return render(request, 'html/profile_preferences.html', {
+        'form': form,
+        'active_section': 'preferences',
+        'onboarding': onboarding,
+    })
+
+
+@login_required
+def change_email_view(request):
+    if request.method == 'POST':
+        form = EmailChangeForm(request.POST, user=request.user)
+        if form.is_valid():
+            request.user.email = form.cleaned_data['email']
+            request.user.save(update_fields=['email'])
+            messages.success(request, 'Adresa de email a fost actualizată.')
+            return redirect('change_email')
+    else:
+        form = EmailChangeForm(user=request.user, initial={'email': request.user.email})
+
+    return render(request, 'html/profile_email.html', {
+        'form': form,
+        'active_section': 'email',
+    })
+
+
+@login_required
+def change_password_view(request):
+    if request.method == 'POST':
+        form = StyledPasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, 'Parola a fost schimbată.')
+            return redirect('change_password')
+    else:
+        form = StyledPasswordChangeForm(request.user)
+
+    return render(request, 'html/profile_password.html', {
+        'form': form,
+        'active_section': 'password',
+    })
+
+
+@login_required
+def delete_account_view(request):
+    if request.method == 'POST':
+        form = DeleteAccountForm(request.POST, user=request.user)
+        if form.is_valid():
+            user = request.user
+            logout(request)
+            user.delete()
+            return redirect('home')
+    else:
+        form = DeleteAccountForm(user=request.user)
+
+    return render(request, 'html/profile_delete.html', {
+        'form': form,
+        'active_section': 'delete',
+    })
 
 
 @require_http_methods(["POST"])

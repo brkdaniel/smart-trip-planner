@@ -1,0 +1,32 @@
+{% extends 'html/profile_base.html' %}
+
+{% block title %}Preferințe{% endblock %}
+{% block heading %}Preferințe{% endblock %}
+{% block card_heading %}Spune-ne ce-ți place.{% endblock %}
+{% block card_subtitle %}
+  <p class="subtitle">Cu cât știm mai multe, cu atât planificăm mai bine.</p>
+{% endblock %}
+
+{% block content %}
+  <form method="post" class="profile-form">
+    {% csrf_token %}
+
+    {% for field in form %}
+      <label>
+        <span>{{ field.label }}</span>
+        {{ field }}
+        {% if field.help_text %}
+          <small class="helptext">{{ field.help_text }}</small>
+        {% endif %}
+        {% if field.errors %}
+          <small class="field-error">{{ field.errors.0 }}</small>
+        {% endif %}
+      </label>
+    {% endfor %}
+
+    <button type="submit" class="profile-button">SALVEAZĂ</button>
+    {% if onboarding %}
+      <a href="{% url 'chat' %}" class="profile-skip-link">Sări peste — îi spun AI-ului pe parcurs</a>
+    {% endif %}
+  </form>
+{% endblock %}

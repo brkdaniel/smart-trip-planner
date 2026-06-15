@@ -41,7 +41,8 @@
             {% endfor %}
         </div>
 
-        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #4b5563;">
+        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid #4b5563; display: flex; flex-direction: column; gap: 12px;">
+            <a href="{% url 'profile' %}" class="sidebar-profile-link" style="color:#9ca3af; text-decoration:none;">⚙ Profil &amp; setări</a>
             <form action="{% url 'logout' %}" method="post">
                 {% csrf_token %}
                 <button type="submit" style="background:none; border:none; color:#9ca3af; cursor:pointer;">Logout</button>
