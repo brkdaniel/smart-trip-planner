@@ -60,10 +60,17 @@ def _format_history(history) -> list[dict]:
     return [{"role": m.role, "content": m.content} for m in history]
 
 
+_SOURCE_LABELS = {
+    "flights": "zboruri",
+    "hotels": "hoteluri",
+    "directions": "rută / direcții",
+}
+
+
 def _format_tool_results(tool_name: str, results: list[dict]) -> str:
     """Render normalized tool results into a DATE REALE block for the prompt."""
-    source = "zboruri" if tool_name == "flights" else "hoteluri"
-    lines = [f"\n\n## DATE REALE — {source} (sursă: RapidAPI, în timp real)"]
+    source = _SOURCE_LABELS.get(tool_name, tool_name)
+    lines = [f"\n\n## DATE REALE — {source} (sursă live)"]
     for r in results:
         parts = [str(r[k]) for k in ("title", "summary") if r.get(k)]
         price = r.get("price")
@@ -76,6 +83,19 @@ def _format_tool_results(tool_name: str, results: list[dict]) -> str:
         "\nFolosește EXACT aceste opțiuni reale (prețuri, nume, ore) în răspuns "
         "și menționează că sunt date live. Nu inventa alte opțiuni."
     )
+    if tool_name == "flights":
+        lines.append(
+            "Pentru FIECARE zbor spune clar dacă este **direct** sau **cu escală** "
+            "(eticheta DIRECT / CU ESCALĂ apare în descrierea de mai sus). Pentru "
+            "cele cu escală, menționează **unde** este escala (orașul) și cât durează."
+        )
+    elif tool_name == "directions":
+        lines.append(
+            "Prezintă ruta clar (mijloace de transport, transferuri, durată dacă "
+            "există) și include **întotdeauna** linkul Google Maps de mai sus, ca "
+            "userul să deschidă direcțiile live. Dacă există doar linkul (fără pași), "
+            "spune-i scurt să-l deschidă pentru ruta în timp real."
+        )
     return "\n".join(lines)
 
 
@@ -117,25 +137,15 @@ def generate_reply(prompt: str, history, preferences, client: LLMClient | None =
     client = client or make_llm_client()
 
     # A3.4: if the message needs real flight/hotel data, fetch it first and
-    # ground the answer in it. The planner uses its own client (env provider).
-    tool_context = _gather_tool_context(history)
+    # ground the answer in it. Reuse the same client for the planner.
+    tool_context = _gather_tool_context(history, client)
 
     system = _load_system_prompt() + _render_preferences(preferences) + tool_context
     messages = _format_history(history)
     if not messages:  # defensive: empty history → use the raw prompt
         messages = [{"role": "user", "content": prompt}]
 
-    try:
-        return client.complete(messages, system)
-    except Exception:
-        # Provider failure (quota, outage, network) must not 500 the chat.
-        # We only reach here when a *real* provider (Anthropic/Gemini) raised —
-        # EchoClient never raises — so a model WAS configured; it just failed.
-        # Return an honest "temporarily unavailable" message rather than the
-        # EchoClient's "no model configured / add an API key" demo text.
-        logger.exception("Concierge provider call failed — degrading gracefully.")
-        return (
-            "🛠️ Asistentul AI este momentan indisponibil (probabil limita de "
-            "utilizare a fost atinsă). Te rog încearcă din nou peste câteva "
-            "minute."
-        )
+    # Provider errors (quota, outage) propagate to the orchestrator, which owns
+    # the user-facing fallback and distinguishes rate-limits from generic
+    # failures (see orchestrator.handle_user_message). Don't double-handle here.
+    return client.complete(messages, system)

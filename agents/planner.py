@@ -14,16 +14,23 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
+from django.utils import timezone
+
 from agents.llm_client import LLMClient, make_llm_client
 
 logger = logging.getLogger(__name__)
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "tool_planner.md"
 
-# Cheap pre-filter: only call the planner LLM if the message smells like booking.
+# Cheap pre-filter: only call the planner LLM if the message smells like a
+# booking or a directions/transport request.
 _KEYWORDS = (
     "zbor", "zboruri", "bilet", "avion", "flight", "fly",
     "hotel", "hoteluri", "cazare", "booking", "hostel", "pensiune",
+    # directions / transport
+    "cum ajung", "cum merg", "cum pot ajunge", "direcți", "directii",
+    "rută", "ruta", "traseu", "transport", "metrou", "autobuz", "tren",
+    "navet", "aeroport",
 )
 
 _FENCE_RE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
@@ -61,21 +68,33 @@ def plan_tool(history, client: LLMClient | None = None) -> dict:
     Never raises: any problem yields ``{"tool": None, "params": {}}``.
     """
     none_result = {"tool": None, "params": {}}
-    last_user = next(
-        (m.content for m in reversed(list(history)) if m.role == "user"), ""
-    )
-    if not needs_tool(last_user):
+    hist = list(history)
+    last_user = next((m.content for m in reversed(hist) if m.role == "user"), "")
+    # Gate: run the planner if the latest user message OR the assistant's last
+    # turn mentions flights/hotels. The second case lets a short follow-up
+    # answer like "din Stockholm" re-trigger a search after the Concierge asked
+    # for a missing detail (departure/date) — that answer has no keyword itself.
+    last_assistant = next((m.content for m in reversed(hist) if m.role == "assistant"), "")
+    if not (needs_tool(last_user) or needs_tool(last_assistant)):
         return none_result
 
     try:
         client = client or make_llm_client()
+        # Give the model today's date so it resolves partial dates ("19 iunie")
+        # to the right YEAR instead of guessing a past one.
+        today = timezone.localdate().isoformat()
+        user_content = (
+            f"Data de azi este {today}.\n\n"
+            + _transcript(history)
+            + "\n\nRăspunde cu JSON."
+        )
         raw = client.complete(
-            [{"role": "user", "content": _transcript(history) + "\n\nRăspunde cu JSON."}],
+            [{"role": "user", "content": user_content}],
             _load_system_prompt(),
         )
         data = _parse_json(raw)
         tool = data.get("tool")
-        if tool not in ("flights", "hotels"):
+        if tool not in ("flights", "hotels", "directions"):
             return none_result
         return {"tool": tool, "params": data.get("params") or {}}
     except Exception:

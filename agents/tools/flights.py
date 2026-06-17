@@ -27,9 +27,7 @@ MAX_RESULTS = 5
 SEARCH_TIMEOUT = 30  # flight search can be slow
 
 
-def _resolve_airport(host: str, key: str, city: str) -> str | None:
-    """City name → IATA airport code via ``searchAirport``, or ``None``."""
-    data = (rapidapi_get(host, "/api/v1/searchAirport", {"query": city}, key=key) or {}).get("data") or []
+def _airport_from_data(data: list) -> str | None:
     for entry in data:
         # A direct airport hit.
         if entry.get("type") == "airport" and entry.get("id"):
@@ -41,12 +39,52 @@ def _resolve_airport(host: str, key: str, city: str) -> str | None:
     return None
 
 
+def _resolve_airport(host: str, key: str, city: str) -> str | None:
+    """City name → IATA airport code via ``searchAirport``, or ``None``.
+
+    google-flights2 occasionally returns a slow/degraded 200 with no airports,
+    so retry once before giving up — a transient blip shouldn't fail the search.
+    """
+    for _ in range(2):
+        data = (rapidapi_get(host, "/api/v1/searchAirport", {"query": city}, key=key) or {}).get("data") or []
+        code = _airport_from_data(data)
+        if code:
+            return code
+    return None
+
+
+def _stops_label(layovers: list, n_legs: int) -> str:
+    """Romanian direct/stops label with layover cities.
+
+    The API's ``stops`` field is unreliable (returns 0 even for multi-leg
+    flights), so we derive everything from the ``layovers`` array, falling back
+    to the segment count.
+    """
+    n_stops = len(layovers) if layovers else max(n_legs - 1, 0)
+    if n_stops == 0:
+        return "DIRECT"
+
+    spots = []
+    for lo in layovers:
+        city = lo.get("city") or lo.get("airport_name") or lo.get("airport_code") or "?"
+        code = lo.get("airport_code")
+        label = f"{city} ({code})" if code and code != city else str(city)
+        dur = lo.get("duration_label")
+        if dur:
+            label += f", {dur}"
+        spots.append(label)
+
+    word = "escală" if n_stops == 1 else "escale"
+    if spots:
+        return f"CU ESCALĂ — {n_stops} {word}: " + "; ".join(spots)
+    return f"CU ESCALĂ — {n_stops} {word}"
+
+
 def _normalize(itin: dict, currency: str, dep: str, arr: str, date: str) -> dict:
     legs = itin.get("flights") or []
     airlines = list(dict.fromkeys(f.get("airline") for f in legs if f.get("airline")))
     code_dep = (legs[0].get("departure_airport") or {}).get("airport_code") if legs else dep
     code_arr = (legs[-1].get("arrival_airport") or {}).get("airport_code") if legs else arr
-    stops = itin.get("stops")
     duration = (itin.get("duration") or {}).get("text") or ""
 
     bits = []
@@ -55,10 +93,7 @@ def _normalize(itin: dict, currency: str, dep: str, arr: str, date: str) -> dict
     dep_t, arr_t = itin.get("departure_time"), itin.get("arrival_time")
     if dep_t and arr_t:
         bits.append(f"{dep_t} → {arr_t}")
-    if stops == 0:
-        bits.append("direct")
-    elif stops:
-        bits.append(f"{stops} escală(e)")
+    bits.append(_stops_label(itin.get("layovers") or [], len(legs)))
     if duration:
         bits.append(duration)
 

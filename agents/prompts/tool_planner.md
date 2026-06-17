@@ -5,7 +5,7 @@ un obiect JSON valid, fără text în plus, fără blocuri de cod.
 ## Schema
 ```
 {
-  "tool": "flights" | "hotels" | null,
+  "tool": "flights" | "hotels" | "directions" | null,
   "params": { ... }
 }
 ```
@@ -16,21 +16,39 @@ un obiect JSON valid, fără text în plus, fără blocuri de cod.
 - `tool = "hotels"` dacă cere cazare/hotel.
   `params`: `{"city": oraș, "checkin": "YYYY-MM-DD", "checkout": "YYYY-MM-DD",
   "adults": număr}`
-- `tool = null` dacă mesajul **nu** cere clar zboruri sau hoteluri (atunci
+- `tool = "directions"` dacă întreabă **cum ajunge** dintr-un loc în altul (rută,
+  direcții, transport, „de la aeroport la hotel", „cum ajung în centru" etc.).
+  `params`: `{"from": loc plecare, "to": loc destinație,
+  "mode": "transit" | "driving" | "walking" | "bicycling"}`.
+  `mode` implicit `"transit"` (transport public). Locurile pot fi adrese, nume de
+  hotel, aeroporturi sau repere (ex: „Aeroportul Otopeni", „Hotel Schulz", „centru").
+- `tool = null` dacă mesajul **nu** cere clar niciuna dintre acestea (atunci
   `params` = `{}`).
 
 ## Reguli
 - Orașele se scriu cu numele lor uzual (ex: "București", "Roma").
 - Datele în format `YYYY-MM-DD`. Dacă lipsesc, pune `null`.
+- **Anul:** mesajul începe cu „Data de azi este AAAA-LL-ZZ". Folosește-l ca să
+  deduci anul. Dacă utilizatorul spune doar ziua și luna (ex: „19 iunie"),
+  folosește **anul curent**; dacă acea zi a trecut deja față de data de azi,
+  folosește **anul următor**. Nu folosi NICIODATĂ un an din trecut.
 - `adults` implicit `1` dacă nu e specificat.
 - Nu inventa. Dacă nu ești sigur că se cer zboruri/hoteluri, întoarce `tool: null`.
 
 ## Exemple
+(presupunând că data de azi este 2026-06-17)
+
 Mesaj: "vreau un zbor de la București la Roma pe 10 iulie pentru 2 persoane"
-→ {"tool":"flights","params":{"from":"București","to":"Roma","date":"2025-07-10","return_date":null,"adults":2}}
+→ {"tool":"flights","params":{"from":"București","to":"Roma","date":"2026-07-10","return_date":null,"adults":2}}
 
 Mesaj: "ce hotel îmi recomanzi în Roma între 10 și 12 iulie?"
-→ {"tool":"hotels","params":{"city":"Roma","checkin":"2025-07-10","checkout":"2025-07-12","adults":1}}
+→ {"tool":"hotels","params":{"city":"Roma","checkin":"2026-07-10","checkout":"2026-07-12","adults":1}}
+
+Mesaj: "cum ajung de la aeroportul Otopeni la Hotel Schulz?"
+→ {"tool":"directions","params":{"from":"Aeroportul Otopeni","to":"Hotel Schulz","mode":"transit"}}
+
+Mesaj: "cât fac cu mașina din centru până la gară?"
+→ {"tool":"directions","params":{"from":"centru","to":"gară","mode":"driving"}}
 
 Mesaj: "ce să vizitez în Roma?"
 → {"tool":null,"params":{}}

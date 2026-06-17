@@ -28,7 +28,7 @@ def available() -> list[str]:
 # (and defensively) so a missing/broken one never blocks the others.
 from importlib import import_module
 
-for _mod in ("flights", "hotels"):
+for _mod in ("flights", "hotels", "directions"):
     try:
         import_module(f"agents.tools.{_mod}")
     except Exception:  # pragma: no cover - optional/not-yet-built tool

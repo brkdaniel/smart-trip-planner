@@ -18,8 +18,12 @@ class UserPreference(models.Model):
         max_length=255,
         blank=True
     )
+    # No default: "unset" must be distinguishable from an explicit "3 stars",
+    # otherwise every new user looks like they prefer 3-star hotels and the
+    # Concierge reports it as a real preference. NULL = not specified yet.
     hotel_stars = models.IntegerField(
-        default=3
+        null=True,
+        blank=True,
     )
     travel_pace = models.CharField(
         max_length=10,

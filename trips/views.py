@@ -22,7 +22,9 @@ def chat_view(request, session_id=None):
     # 2. Daca avem un session_id in URL, incarcam acea conversatie
     if session_id:
         current_session = get_object_or_404(ChatSession, id=session_id, user=request.user)
-        messages = current_session.messages.all().order_by('sent_at')
+        # Tiebreak by id so two messages saved in the same instant keep insertion
+        # order (matches the orchestrator's '-sent_at', '-id' ordering).
+        messages = current_session.messages.all().order_by('sent_at', 'id')
 
     # 3. Procesarea unui mesaj nou (POST)
     if request.method == 'POST':
@@ -41,9 +43,12 @@ def chat_view(request, session_id=None):
 
         # A. Daca nu suntem intr-o sesiune (e chat nou), o cream
         if not current_session:
+            # Titlu temporar din primul mesaj. Adăugăm "..." doar dacă a fost
+            # trunchiat — la fel ca logica din sidebar (chat.js addNewSessionToSidebar).
+            title = prompt[:30] + "..." if len(prompt) > 30 else prompt
             current_session = ChatSession.objects.create(
                 user=request.user,
-                title=prompt[:30] + "...", # Titlu temporar din primul mesaj
+                title=title,
                 status='pending'
             )
 

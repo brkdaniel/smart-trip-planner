@@ -152,6 +152,13 @@ RAPIDAPI_HOTELS_HOST = os.getenv('RAPIDAPI_HOTELS_HOST', '')
 RAPIDAPI_FLIGHTS_PATH = os.getenv('RAPIDAPI_FLIGHTS_PATH', '')
 RAPIDAPI_HOTELS_PATH = os.getenv('RAPIDAPI_HOTELS_PATH', '')
 
+# Directions/routing (airport → hotel, anywhere → anywhere) via the official
+# Google Maps Directions API. Optional: without the key the DirectionsTool still
+# returns a live Google Maps link; with it, the route is narrated in chat.
+# Needs a Maps Platform key with the Directions API enabled (separate from the
+# Gemini GOOGLE_API_KEY).
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')
+
 # A3.3: log every LLM call (model, tokens, latency, success/fail) to a file.
 LOGGING = {
     'version': 1,
