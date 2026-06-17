@@ -81,13 +81,19 @@ def _format_tool_results(tool_name: str, results: list[dict]) -> str:
         lines.append("- " + " — ".join(parts))
     lines.append(
         "\nFolosește EXACT aceste opțiuni reale (prețuri, nume, ore) în răspuns "
-        "și menționează că sunt date live. Nu inventa alte opțiuni."
+        "și menționează că sunt date live. Include linkul fiecărei opțiuni exact "
+        "cum apare mai sus. Nu inventa alte opțiuni și nu modifica linkurile."
     )
     if tool_name == "flights":
         lines.append(
             "Pentru FIECARE zbor spune clar dacă este **direct** sau **cu escală** "
             "(eticheta DIRECT / CU ESCALĂ apare în descrierea de mai sus). Pentru "
             "cele cu escală, menționează **unde** este escala (orașul) și cât durează."
+        )
+    elif tool_name == "hotels":
+        lines.append(
+            "Pentru FIECARE hotel include linkul de rezervare de mai sus — este "
+            "**pagina reală Booking** a hotelului. Nu folosi linkuri de tip exemplu."
         )
     elif tool_name == "directions":
         lines.append(
