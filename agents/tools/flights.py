@@ -13,9 +13,7 @@ google-flights2 is a separate subscription from the hotels listing, so it uses
 its own key (``RAPIDAPI_FLIGHTS_KEY``).
 """
 
-from __future__ import annotations
-
-from urllib.parse import quote
+import base64
 
 from django.conf import settings
 
@@ -27,30 +25,76 @@ MAX_RESULTS = 5
 SEARCH_TIMEOUT = 30  # flight search can be slow
 
 
-def _airport_from_data(data: list) -> str | None:
+def _place_from_data(data: list) -> tuple[str | None, str | None]:
+    """Extract (IATA code, Google entity id) from a searchAirport response.
+
+    The IATA code feeds the searchFlights API; the entity id (``/m/...``) feeds
+    the Google Flights ``tfs`` deep-link. A city entry (``type: other``) carries
+    its entity id at the top level and its airports in ``list``.
+    """
     for entry in data:
-        # A direct airport hit.
+        # A direct airport hit: code == entity (the IATA code works in both).
         if entry.get("type") == "airport" and entry.get("id"):
-            return entry["id"]
-        # A city entry carries its airports in `list`; take the first airport.
+            return entry["id"], entry["id"]
+        # A city entry: entity id at top level, IATA from the first airport child.
+        entity = entry.get("id")
         for child in entry.get("list") or []:
             if child.get("type") == "airport" and child.get("id"):
-                return child["id"]
-    return None
+                return child["id"], (entity or child["id"])
+    return None, None
 
 
-def _resolve_airport(host: str, key: str, city: str) -> str | None:
-    """City name → IATA airport code via ``searchAirport``, or ``None``.
+def _resolve_place(host: str, key: str, city: str) -> tuple[str | None, str | None]:
+    """City name → (IATA code, entity id) via ``searchAirport``, or (None, None).
 
     google-flights2 occasionally returns a slow/degraded 200 with no airports,
     so retry once before giving up — a transient blip shouldn't fail the search.
     """
     for _ in range(2):
         data = (rapidapi_get(host, "/api/v1/searchAirport", {"query": city}, key=key) or {}).get("data") or []
-        code = _airport_from_data(data)
+        code, entity = _place_from_data(data)
         if code:
-            return code
-    return None
+            return code, entity
+    return None, None
+
+
+# --- Google Flights deep-link (tfs protobuf) --------------------------------
+# A ``?q=...`` text search lands on the Flights homepage; the real results page
+# needs the ``tfs`` parameter — a base64url protobuf encoding the route + date
+# with Google entity ids. Structure reverse-engineered from a live URL.
+def _pb_varint(n: int) -> bytes:
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        out.append(b | 0x80 if n else b)
+        if not n:
+            return bytes(out)
+
+
+def _pb_vfield(f: int, n: int) -> bytes:
+    return _pb_varint(f << 3) + _pb_varint(n)
+
+
+def _pb_sfield(f: int, s: str) -> bytes:
+    b = s.encode()
+    return _pb_varint(f << 3 | 2) + _pb_varint(len(b)) + b
+
+
+def _pb_mfield(f: int, body: bytes) -> bytes:
+    return _pb_varint(f << 3 | 2) + _pb_varint(len(body)) + body
+
+
+def _flights_link(dep_entity: str, arr_entity: str, date: str) -> str:
+    """Build a Google Flights results URL (one-way) for the given route + date."""
+    leg = (_pb_sfield(2, date)
+           + _pb_mfield(13, _pb_vfield(1, 2) + _pb_sfield(2, dep_entity))
+           + _pb_mfield(14, _pb_vfield(1, 3) + _pb_sfield(2, arr_entity)))
+    body = (_pb_vfield(1, 28) + _pb_vfield(2, 2) + _pb_mfield(3, leg)
+            + _pb_vfield(8, 1) + _pb_vfield(9, 1) + _pb_vfield(14, 1)
+            + _pb_mfield(16, _pb_vfield(1, (1 << 64) - 1)) + _pb_vfield(19, 2))
+    tfs = base64.urlsafe_b64encode(body).decode().rstrip("=")
+    return f"https://www.google.com/travel/flights/search?tfs={tfs}&hl=en&gl=RO"
 
 
 def _stops_label(layovers: list, n_legs: int) -> str:
@@ -80,11 +124,11 @@ def _stops_label(layovers: list, n_legs: int) -> str:
     return f"CU ESCALĂ — {n_stops} {word}"
 
 
-def _normalize(itin: dict, currency: str, dep: str, arr: str, date: str) -> dict:
+def _normalize(itin: dict, currency: str, link: str) -> dict:
     legs = itin.get("flights") or []
     airlines = list(dict.fromkeys(f.get("airline") for f in legs if f.get("airline")))
-    code_dep = (legs[0].get("departure_airport") or {}).get("airport_code") if legs else dep
-    code_arr = (legs[-1].get("arrival_airport") or {}).get("airport_code") if legs else arr
+    code_dep = (legs[0].get("departure_airport") or {}).get("airport_code") if legs else ""
+    code_arr = (legs[-1].get("arrival_airport") or {}).get("airport_code") if legs else ""
     duration = (itin.get("duration") or {}).get("text") or ""
 
     bits = []
@@ -97,13 +141,12 @@ def _normalize(itin: dict, currency: str, dep: str, arr: str, date: str) -> dict
     if duration:
         bits.append(duration)
 
-    route = f"Flights from {code_dep or dep} to {code_arr or arr} on {date}"
     return {
         "title": " / ".join(airlines) or "Zbor",
         "summary": " · ".join(bits),
         "price": itin.get("price"),
         "currency": currency,
-        "link": "https://www.google.com/travel/flights?q=" + quote(route),
+        "link": link,
     }
 
 
@@ -122,15 +165,15 @@ class FlightSearchTool(Tool):
         host = getattr(settings, "RAPIDAPI_FLIGHTS_HOST", "")
         key = getattr(settings, "RAPIDAPI_FLIGHTS_KEY", "")
 
-        dep = _resolve_airport(host, key, origin)
-        arr = _resolve_airport(host, key, dest)
-        if not (dep and arr):
+        dep_code, dep_entity = _resolve_place(host, key, origin)
+        arr_code, arr_entity = _resolve_place(host, key, dest)
+        if not (dep_code and arr_code):
             return fail("airport not found")
 
         currency = "EUR"
         query = {
-            "departure_id": dep,
-            "arrival_id": arr,
+            "departure_id": dep_code,
+            "arrival_id": arr_code,
             "outbound_date": date,
             "travel_class": "ECONOMY",
             "adults": str(adults),
@@ -146,7 +189,9 @@ class FlightSearchTool(Tool):
         if not flights:
             return fail("no flights")
 
-        return ok([_normalize(f, currency, dep, arr, date) for f in flights[:MAX_RESULTS]])
+        # One results-page link for this route+date (Google Flights tfs deep-link).
+        link = _flights_link(dep_entity, arr_entity, date)
+        return ok([_normalize(f, currency, link) for f in flights[:MAX_RESULTS]])
 
 
 register(FlightSearchTool())

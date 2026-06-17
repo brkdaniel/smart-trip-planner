@@ -26,7 +26,12 @@ un obiect JSON valid, fără text în plus, fără blocuri de cod.
   `params` = `{}`).
 
 ## Reguli
-- Orașele se scriu cu numele lor uzual (ex: "București", "Roma").
+- **Numele orașelor** (`from`, `to`, `city`) se scriu în **engleză / forma
+  internațională**, NU în română: „Bucharest" (nu „București"), „Budapest" (nu
+  „Budapesta"), „Vienna" (nu „Viena"), „Prague" (nu „Praga"), „Rome" (nu „Roma"),
+  „Warsaw" (nu „Varșovia"). API-urile de zboruri/hoteluri nu recunosc exonimele
+  românești. (Pentru `directions`, numele proprii de aeroporturi/hoteluri/repere
+  pot rămâne ca atare.)
 - Datele în format `YYYY-MM-DD`. Dacă lipsesc, pune `null`.
 - **Anul:** mesajul începe cu „Data de azi este AAAA-LL-ZZ". Folosește-l ca să
   deduci anul. Dacă utilizatorul spune doar ziua și luna (ex: „19 iunie"),
@@ -39,10 +44,13 @@ un obiect JSON valid, fără text în plus, fără blocuri de cod.
 (presupunând că data de azi este 2026-06-17)
 
 Mesaj: "vreau un zbor de la București la Roma pe 10 iulie pentru 2 persoane"
-→ {"tool":"flights","params":{"from":"București","to":"Roma","date":"2026-07-10","return_date":null,"adults":2}}
+→ {"tool":"flights","params":{"from":"Bucharest","to":"Rome","date":"2026-07-10","return_date":null,"adults":2}}
+
+Mesaj: "zbor spre Budapesta pe 20 iunie"
+→ {"tool":"flights","params":{"from":null,"to":"Budapest","date":"2026-06-20","return_date":null,"adults":1}}
 
 Mesaj: "ce hotel îmi recomanzi în Roma între 10 și 12 iulie?"
-→ {"tool":"hotels","params":{"city":"Roma","checkin":"2026-07-10","checkout":"2026-07-12","adults":1}}
+→ {"tool":"hotels","params":{"city":"Rome","checkin":"2026-07-10","checkout":"2026-07-12","adults":1}}
 
 Mesaj: "cum ajung de la aeroportul Otopeni la Hotel Schulz?"
 → {"tool":"directions","params":{"from":"Aeroportul Otopeni","to":"Hotel Schulz","mode":"transit"}}
