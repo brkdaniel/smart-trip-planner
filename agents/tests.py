@@ -452,3 +452,44 @@ class MergeTests(SimpleTestCase):
             prefs, {"hotel_stars": 4, "interests": "muzee", "travel_pace": "slow"}
         )
         self.assertEqual(set(changed), {"hotel_stars", "interests", "travel_pace"})
+
+
+# --------------------------------------------------------------------------- #
+# Directions tool
+# --------------------------------------------------------------------------- #
+class DirectionsToolTests(SimpleTestCase):
+    def _tool(self):
+        from agents.tools.directions import DirectionsTool
+        return DirectionsTool()
+
+    def test_builds_live_maps_link_without_api(self):
+        out = self._tool().run({"from": "Aeroportul Otopeni", "to": "Hotel Schulz"})
+        self.assertTrue(out["ok"])
+        link = out["results"][0]["link"]
+        self.assertIn("google.com/maps/dir/", link)
+        self.assertIn("travelmode=transit", link)  # default mode
+        self.assertIn("Otopeni", link)
+
+    def test_missing_endpoints_fail_cleanly(self):
+        self.assertFalse(self._tool().run({"from": "X"})["ok"])
+
+    def test_invalid_mode_falls_back_to_transit(self):
+        link = self._tool().run({"from": "a", "to": "b", "mode": "teleport"})["results"][0]["link"]
+        self.assertIn("travelmode=transit", link)
+
+    def test_summarize_parses_google_directions_shape(self):
+        from agents.tools.directions import _summarize
+        data = {"routes": [{"legs": [{
+            "duration": {"text": "42 mins"},
+            "steps": [{"travel_mode": "TRANSIT", "transit_details": {
+                "line": {"short_name": "T14"},
+                "departure_stop": {"name": "A"}, "arrival_stop": {"name": "B"}}}],
+        }]}]}
+        summary = _summarize(data)
+        self.assertIn("42 mins", summary)
+        self.assertIn("T14", summary)
+
+    def test_summarize_empty_on_garbage(self):
+        from agents.tools.directions import _summarize
+        self.assertEqual(_summarize({}), "")
+        self.assertEqual(_summarize({"routes": []}), "")
