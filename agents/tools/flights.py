@@ -19,7 +19,7 @@ from django.conf import settings
 
 from agents.tools import register
 from agents.tools.base import Tool, fail, ok
-from agents.tools.rapidapi import rapidapi_get
+from agents.tools.rapidapi import RateLimited, rapidapi_get
 
 MAX_RESULTS = 5
 SEARCH_TIMEOUT = 30  # flight search can be slow
@@ -165,27 +165,35 @@ class FlightSearchTool(Tool):
         host = getattr(settings, "RAPIDAPI_FLIGHTS_HOST", "")
         key = getattr(settings, "RAPIDAPI_FLIGHTS_KEY", "")
 
-        dep_code, dep_entity = _resolve_place(host, key, origin)
-        arr_code, arr_entity = _resolve_place(host, key, dest)
-        if not (dep_code and arr_code):
-            return fail("airport not found")
+        try:
+            dep_code, dep_entity = _resolve_place(host, key, origin)
+            arr_code, arr_entity = _resolve_place(host, key, dest)
+            if not (dep_code and arr_code):
+                return fail("airport not found")
 
-        currency = "EUR"
-        query = {
-            "departure_id": dep_code,
-            "arrival_id": arr_code,
-            "outbound_date": date,
-            "travel_class": "ECONOMY",
-            "adults": str(adults),
-            "currency": currency,
-            "search_type": "best",
-        }
-        if return_date:
-            query["return_date"] = return_date
+            currency = "EUR"
+            query = {
+                "departure_id": dep_code,
+                "arrival_id": arr_code,
+                "outbound_date": date,
+                "travel_class": "ECONOMY",
+                "adults": str(adults),
+                "currency": currency,
+                "search_type": "best",
+            }
+            if return_date:
+                query["return_date"] = return_date
 
-        data = rapidapi_get(host, "/api/v1/searchFlights", query, key=key, timeout=SEARCH_TIMEOUT)
-        itineraries = ((data or {}).get("data") or {}).get("itineraries") or {}
-        flights = (itineraries.get("topFlights") or []) + (itineraries.get("otherFlights") or [])
+            # searchFlights occasionally returns an empty 200, so retry once.
+            flights = []
+            for _ in range(2):
+                data = rapidapi_get(host, "/api/v1/searchFlights", query, key=key, timeout=SEARCH_TIMEOUT)
+                itineraries = ((data or {}).get("data") or {}).get("itineraries") or {}
+                flights = (itineraries.get("topFlights") or []) + (itineraries.get("otherFlights") or [])
+                if flights:
+                    break
+        except RateLimited:
+            return fail("rate_limited")
         if not flights:
             return fail("no flights")
 

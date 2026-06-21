@@ -10,6 +10,7 @@ strategy. It does **not** know which provider is behind the client.
 from __future__ import annotations
 
 import logging
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -18,6 +19,11 @@ from agents.llm_client import LLMClient, make_llm_client
 from agents.tools import get_tool
 
 logger = logging.getLogger(__name__)
+
+# Google Flights links carry a long base64 ``tfs`` token that the LLM tends to
+# corrupt when it copies it into the reply (wrong case, dropped chars) — which
+# sends the user to the Flights homepage instead of the results. We repair them.
+_GFLIGHTS_URL_RE = re.compile(r"https?://www\.google\.com/travel/flights/search\?[^\s)\]]+")
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "concierge.md"
 
@@ -120,12 +126,26 @@ def _gather_tool_context(history, client: LLMClient | None = None) -> str:
         if tool is None:
             return ""
         result = tool.run(plan.get("params") or {})
+        if result.get("error") == "rate_limited":
+            return _format_rate_limited(tool_name)
         if not result.get("ok") or not result.get("results"):
             return ""
         return _format_tool_results(tool_name, result["results"])
     except Exception:
         logger.exception("Tool context failed (non-fatal).")
         return ""
+
+
+def _format_rate_limited(tool_name: str) -> str:
+    """Tell the Concierge the live search hit its quota, so it can say so."""
+    kind = _SOURCE_LABELS.get(tool_name, "datele")
+    return (
+        "\n\n## SERVICIU TEMPORAR INDISPONIBIL\n"
+        f"Căutarea live de {kind} a atins limita de utilizare (cota API) și nu poate "
+        "rula chiar acum. Spune-i utilizatorului, scurt și politicos, că momentan nu "
+        f"poți căuta {kind} în timp real din cauza limitei și să încerce din nou peste "
+        "puțin timp. NU inventa rezultate și NU oferi linkuri inventate."
+    )
 
 
 def generate_reply(prompt: str, history, preferences, client: LLMClient | None = None) -> str:
@@ -154,4 +174,18 @@ def generate_reply(prompt: str, history, preferences, client: LLMClient | None =
     # Provider errors (quota, outage) propagate to the orchestrator, which owns
     # the user-facing fallback and distinguishes rate-limits from generic
     # failures (see orchestrator.handle_user_message). Don't double-handle here.
-    return client.complete(messages, system)
+    reply = client.complete(messages, system)
+    return _repair_flight_links(reply, tool_context)
+
+
+def _repair_flight_links(reply: str, tool_context: str) -> str:
+    """Replace any Google Flights link in the reply with the canonical one.
+
+    All flights of a single search share one link, so if the tool context holds
+    exactly one Google Flights URL, we overwrite every (possibly LLM-corrupted)
+    flights URL in the reply with it — fixing the broken ``tfs`` token.
+    """
+    correct = set(_GFLIGHTS_URL_RE.findall(tool_context or ""))
+    if len(correct) == 1:
+        return _GFLIGHTS_URL_RE.sub(correct.pop(), reply)
+    return reply

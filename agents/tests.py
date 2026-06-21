@@ -493,3 +493,65 @@ class DirectionsToolTests(SimpleTestCase):
         from agents.tools.directions import _summarize
         self.assertEqual(_summarize({}), "")
         self.assertEqual(_summarize({"routes": []}), "")
+
+
+# --------------------------------------------------------------------------- #
+# Rate-limit (HTTP 429) handling
+# --------------------------------------------------------------------------- #
+class RateLimitTests(SimpleTestCase):
+    def test_rapidapi_get_raises_on_429(self):
+        from agents.tools import rapidapi
+        resp = mock.Mock(status_code=429)
+        with mock.patch.object(rapidapi.requests, "get", return_value=resp):
+            with self.assertRaises(rapidapi.RateLimited):
+                rapidapi.rapidapi_get("h", "/p", {}, key="k")
+
+    def test_flights_tool_reports_rate_limited(self):
+        from agents.tools import get_tool
+        from agents.tools.rapidapi import RateLimited
+        with mock.patch("agents.tools.flights.rapidapi_get", side_effect=RateLimited("h")):
+            out = get_tool("flights").run({"from": "Bucharest", "to": "Paris", "date": "2026-06-28"})
+        self.assertFalse(out["ok"])
+        self.assertEqual(out["error"], "rate_limited")
+
+    def test_hotels_tool_reports_rate_limited(self):
+        from agents.tools import get_tool
+        from agents.tools.rapidapi import RateLimited
+        with mock.patch("agents.tools.hotels.rapidapi_get", side_effect=RateLimited("h")):
+            out = get_tool("hotels").run({"city": "Paris", "checkin": "2026-06-28", "checkout": "2026-06-30"})
+        self.assertEqual(out["error"], "rate_limited")
+
+    def test_context_announces_rate_limit(self):
+        with mock.patch.object(concierge.planner, "plan_tool",
+                               return_value={"tool": "flights", "params": {}}), \
+                mock.patch.object(concierge, "get_tool",
+                                  return_value=SimpleNamespace(
+                                      run=lambda p: {"ok": False, "results": [], "error": "rate_limited"})):
+            ctx = concierge._gather_tool_context([SimpleNamespace(role="user", content="zbor")])
+        self.assertIn("SERVICIU TEMPORAR INDISPONIBIL", ctx)
+
+
+# --------------------------------------------------------------------------- #
+# Google Flights link repair (LLM corrupts the long tfs token)
+# --------------------------------------------------------------------------- #
+class FlightLinkRepairTests(SimpleTestCase):
+    CORRECT = ("https://www.google.com/travel/flights/search?tfs="
+               "CBwQAhoeEgoyMDI2LTA2LTI4agcIAhIDT1RQcgcIAxIDQ0RHQAFIAXABggELCP_wGYAQI&hl=en&gl=RO")
+
+    def test_replaces_corrupted_link(self):
+        context = "## DATE REALE\n- TAROM — " + self.CORRECT
+        corrupt = self.CORRECT.replace("agcI", "AGCI")  # LLM-style case corruption
+        reply = "Zborul: [Google Flights](" + corrupt + ")"
+        fixed = concierge._repair_flight_links(reply, context)
+        self.assertIn(self.CORRECT, fixed)
+        self.assertNotIn(corrupt, fixed)
+
+    def test_noop_without_context_link(self):
+        self.assertEqual(concierge._repair_flight_links("text", ""), "text")
+
+    def test_noop_when_multiple_distinct_links(self):
+        other = self.CORRECT.replace("gl=RO", "gl=FR")  # a genuinely different URL
+        ctx = "a " + self.CORRECT + " b " + other
+        reply = "x " + self.CORRECT.replace("agcI", "AGCI")
+        # two distinct canonical links -> ambiguous -> leave reply as-is
+        self.assertEqual(concierge._repair_flight_links(reply, ctx), reply)

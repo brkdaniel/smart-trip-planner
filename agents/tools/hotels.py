@@ -21,7 +21,7 @@ from django.conf import settings
 
 from agents.tools import register
 from agents.tools.base import Tool, fail, ok
-from agents.tools.rapidapi import rapidapi_get
+from agents.tools.rapidapi import RateLimited, rapidapi_get
 
 MAX_RESULTS = 5
 SEARCH_TIMEOUT = 40   # Booking search is slow
@@ -41,15 +41,22 @@ def _search_link(name: str, checkin: str, checkout: str, adults) -> str:
 
 
 def _real_url(host: str, hotel_id, checkin: str, checkout: str, adults) -> str | None:
-    """The hotel's real Booking page URL via /stays/detail, or None on failure."""
+    """The hotel's real Booking page URL via /stays/detail, or None on failure.
+
+    A 429 here is non-fatal (the search already succeeded) — return None so the
+    caller falls back to the dated search link.
+    """
     if not hotel_id:
         return None
-    data = rapidapi_get(
-        host, "/stays/detail",
-        {"hotelId": str(hotel_id), "checkinDate": checkin,
-         "checkoutDate": checkout, "adults": str(adults), "currency_code": "EUR"},
-        timeout=DETAIL_TIMEOUT,
-    )
+    try:
+        data = rapidapi_get(
+            host, "/stays/detail",
+            {"hotelId": str(hotel_id), "checkinDate": checkin,
+             "checkoutDate": checkout, "adults": str(adults), "currency_code": "EUR"},
+            timeout=DETAIL_TIMEOUT,
+        )
+    except RateLimited:
+        return None
     if not data:
         return None
     match = _HOTEL_URL_RE.search(json.dumps(data))
@@ -94,26 +101,29 @@ class HotelSearchTool(Tool):
 
         host = getattr(settings, "RAPIDAPI_HOTELS_HOST", "")
 
-        ac = rapidapi_get(host, "/stays/auto-complete", {"query": city})
-        location = (ac or {}).get("data") or []
-        if not location:
-            return fail("location not found")
-        loc_id = location[0].get("id")
-        if not loc_id:
-            return fail("location id missing")
+        try:
+            ac = rapidapi_get(host, "/stays/auto-complete", {"query": city})
+            location = (ac or {}).get("data") or []
+            if not location:
+                return fail("location not found")
+            loc_id = location[0].get("id")
+            if not loc_id:
+                return fail("location id missing")
 
-        data = rapidapi_get(
-            host,
-            "/stays/search",
-            {
-                "locationId": loc_id,
-                "checkinDate": checkin,
-                "checkoutDate": checkout,
-                "adults": str(adults),
-                "currency_code": "EUR",
-            },
-            timeout=SEARCH_TIMEOUT,
-        )
+            data = rapidapi_get(
+                host,
+                "/stays/search",
+                {
+                    "locationId": loc_id,
+                    "checkinDate": checkin,
+                    "checkoutDate": checkout,
+                    "adults": str(adults),
+                    "currency_code": "EUR",
+                },
+                timeout=SEARCH_TIMEOUT,
+            )
+        except RateLimited:
+            return fail("rate_limited")
         hotels = (data or {}).get("data") or []
         if not hotels:
             return fail("no hotels")

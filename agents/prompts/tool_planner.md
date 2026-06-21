@@ -32,6 +32,11 @@ un obiect JSON valid, fără text în plus, fără blocuri de cod.
   „Warsaw" (nu „Varșovia"). API-urile de zboruri/hoteluri nu recunosc exonimele
   românești. (Pentru `directions`, numele proprii de aeroporturi/hoteluri/repere
   pot rămâne ca atare.)
+- **Aeroport specific (doar zboruri):** dacă utilizatorul cere un aeroport anume
+  — prin cod (CDG, OTP, JFK, LHR) sau prin nume („Charles de Gaulle", „Otopeni",
+  „Heathrow", „Orly") — pune în `from`/`to` **codul IATA** al acelui aeroport
+  (CDG, OTP, JFK, LHR, ORY). Doar dacă NU specifică un aeroport, folosește numele
+  orașului (caz în care se caută toate aeroporturile orașului).
 - Datele în format `YYYY-MM-DD`. Dacă lipsesc, pune `null`.
 - **Anul:** mesajul începe cu „Data de azi este AAAA-LL-ZZ". Folosește-l ca să
   deduci anul. Dacă utilizatorul spune doar ziua și luna (ex: „19 iunie"),
@@ -48,6 +53,9 @@ Mesaj: "vreau un zbor de la București la Roma pe 10 iulie pentru 2 persoane"
 
 Mesaj: "zbor spre Budapesta pe 20 iunie"
 → {"tool":"flights","params":{"from":null,"to":"Budapest","date":"2026-06-20","return_date":null,"adults":1}}
+
+Mesaj: "vreau un zbor de la Otopeni la Paris Charles de Gaulle pe 28 iunie"
+→ {"tool":"flights","params":{"from":"OTP","to":"CDG","date":"2026-06-28","return_date":null,"adults":1}}
 
 Mesaj: "ce hotel îmi recomanzi în Roma între 10 și 12 iulie?"
 → {"tool":"hotels","params":{"city":"Rome","checkin":"2026-07-10","checkout":"2026-07-12","adults":1}}

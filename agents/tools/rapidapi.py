@@ -20,6 +20,15 @@ logger = logging.getLogger("agents.tools")
 DEFAULT_TIMEOUT = 12  # seconds
 
 
+class RateLimited(Exception):
+    """Raised when a RapidAPI listing returns HTTP 429 (quota/rate exceeded).
+
+    Distinct from a generic failure (which returns ``None``) so callers can tell
+    the user the search is temporarily over its limit instead of pretending there
+    are no results.
+    """
+
+
 def rapidapi_get(
     host: str,
     path: str,
@@ -47,9 +56,17 @@ def rapidapi_get(
     try:
         response = requests.get(url, headers=headers, params=params, timeout=timeout)
         latency_ms = int((time.perf_counter() - started) * 1000)
+        if response.status_code == 429:
+            logger.warning(
+                "tool=rapidapi host=%s path=%s latency_ms=%d ok=0 error=429-rate-limited",
+                host, path, latency_ms,
+            )
+            raise RateLimited(host)
         response.raise_for_status()
         logger.info("tool=rapidapi host=%s path=%s latency_ms=%d ok=1", host, path, latency_ms)
         return response.json()
+    except RateLimited:
+        raise  # propagate so callers can surface a clear "over limit" message
     except Exception as exc:
         latency_ms = int((time.perf_counter() - started) * 1000)
         logger.warning(
